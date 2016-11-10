@@ -13,9 +13,16 @@ usa: build/USA_event.arc build/USA_challenge.arc
 clean:
 	rm -rf build
 
-build/%_payload.o: payload.s
+build/%_nopsled.o: nopsled.s
 	mkdir -p build
-	$(CC) $(CFLAGS) -c -o $@ -D$* -DCRR_HASH_COUNT=$(CRR_HASH_COUNT) $<
+	$(CC) $(CFLAGS) -c -o $@ -D$* $<
+
+build/%_nopsled.cro: build/%_nopsled.o
+	$(OBJCPY) -O binary $< $@
+	python patch_cro.py $@ $(CRR_HASH_COUNT)
+
+build/%_payload.o: build/%_nopsled.cro payload.s
+	$(CC) $(CFLAGS) -c -o $@ -D$* -DCRR_HASH_COUNT=$(CRR_HASH_COUNT) -DCRO_FILE_PATH=\"$<\" payload.s
 
 build/%_payload.cro: build/%_payload.o
 	$(OBJCPY) -O binary $< $@

@@ -55,10 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // service handles
 #define GSPGPU_HANDLE_PTR REGION_CONST(0xddd4e4, 0xdc627c, 0xdc627c)
 #define FSUSER_HANDLE_PTR REGION_CONST(0xdcfe30, 0xdb82e8, 0xdb82e8)
-// other
-#define NULLSUB_PTR_PTR REGION_CONST(0x9d2a98, 0x9ee44c, 0x9ee414)
-#define EXTDATA_ID REGION_CONST(0x1554, 0x185b, 0x1870)
-#define OTHERAPP_VA 0x101000
+#define LDRRO_HANDLE_PTR REGION_CONST(0xdd08d0, 0xdb91a4, 0xdb91a4)
 // linear offsets
 #define CODEBIN_SIZE REGION_CONST(0xd01000, 0xcea000, 0xcea000)
 #define BSS_SIZE REGION_CONST(0x5d818, 0x721cc, 0x721cc)
@@ -67,7 +64,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define CODEBIN_START_LINEAR 0x37c00000 - CODEBIN_SIZE
 #define HEAP_START_LINEAR CODEBIN_START_LINEAR - (BSS_SIZE & ~0xfff) - STACK_SIZE - HEAP_SIZE
 #define CRR_START_LINEAR REGION_CONST(HEAP_START_LINEAR+0x80000+0x6e0000, HEAP_START_LINEAR+0xb2000+0x6ef000, HEAP_START_LINEAR+0xb2000+0x6ee000)
-#define OTHERAPP_START_LINEAR 0x37c00000 - (CODEBIN_SIZE & ~0xfffff) + 0x1000 // temporary, until paslr bypass is implemented
+// other
+#define NULLSUB_PTR_PTR REGION_CONST(0x9d2a98, 0x9ee44c, 0x9ee414)
+#define EXTDATA_ID REGION_CONST(0x1554, 0x185b, 0x1870)
+#define OTHERAPP_VA 0x101000
+#define ICACHE_SIZE 0x8000
+#define CRO_MAP_FIX 0x8000000 - (0x100000 + CODEBIN_SIZE + (BSS_SIZE & ~0xfff))
 // texture file settings
 #define MIPMAP_COUNT 11
 #define TEXTURE_COUNT 252
