@@ -1,4 +1,5 @@
-This is a secondary homebrew exploit for Monster Hunter Generations.
+This is a secondary homebrew exploit for Monster Hunter Generations. It works
+for the JPN, EUR and USA regions of the game, using the latest game updates.
 
 There are some notable limitations for this exploit:
   * It only works on New 3DS systems. This is because game uses extended memory
@@ -15,7 +16,7 @@ There are some notable limitations for this exploit:
 Technical details can be found on the wiki:
   https://github.com/svanheulen/genhax/wiki
 
-An installer for the exploit can be found in this repo:
+An installer with instructions can be found in this repo:
   https://github.com/svanheulen/genhax_installer
 
 You can report issues, get the latest version, and view the source at:
