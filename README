@@ -6,6 +6,11 @@ There are some notable limitations for this exploit:
   * It must be installed on the system you want to use it on. This is because
     the exploit uses the game's ExtData which is stored on the SD card, not the
     game cart.
+  * You will no longer be able to post certain quests in the Hunters Hub. If
+    you install the exploit as an event quest, you wont be able to post event
+    quests. If you install the exploit as a challenge quest, you wont be able to
+    post challenge quests. But you should still be able to join event/challenge
+    quests that other players post.
 
 Technical details can be found on the wiki:
   https://github.com/svanheulen/genhax/wiki
