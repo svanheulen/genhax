@@ -374,9 +374,6 @@ _patch_crr_copy_loop:
     mov r1, r5 // src
     mov r2, #CRR_HASH_COUNT*0x20 // size
     bl gspwn
-    ldr r0, =CRR_START_LINEAR+0x360 // addr
-    mov r1, #CRR_HASH_COUNT*0x20 // size
-    bl invalidate_dcache
     ldmfd sp!, {r4-r6,pc}
 
 .pool
