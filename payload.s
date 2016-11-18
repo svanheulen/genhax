@@ -128,12 +128,8 @@ main:
     str r2, [r0, #0x1c]
     ldr r2, =GSPGPU_FLUSHDATACACHE
     str r2, [r0, #0x20]
-    mov r2, #0x8d
-    str r2, [r0, #0x48]
     ldr r2, =GSPGPU_HANDLE_PTR
     str r2, [r0, #0x58]
-    ldr r2, =0x08010000
-    str r2, [r0, #0x64]
     // jump to otherapp code
     mov r1, #0x10000000
     sub r1, r1, #4
