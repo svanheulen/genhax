@@ -364,7 +364,7 @@ _patch_crr_copy_loop:
     cmp r6, #CRR_HASH_COUNT*0x20
     bne _patch_crr_copy_loop
     mov r0, r5 // addr
-    mov r2, #CRR_HASH_COUNT*0x20 // size
+    mov r1, #CRR_HASH_COUNT*0x20 // size
     bl flush_dcache
     ldr r0, =CRR_START_LINEAR+0x360 // dst
     mov r1, r5 // src
