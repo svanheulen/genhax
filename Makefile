@@ -1,5 +1,5 @@
 CC=$(DEVKITARM)/bin/arm-none-eabi-gcc
-CFLAGS=-x assembler-with-cpp
+CFLAGS=-march=armv6k -mtune=mpcore -x assembler-with-cpp
 OBJCPY=$(DEVKITARM)/bin/arm-none-eabi-objcopy
 
 CRR_HASH_COUNT=96

@@ -69,129 +69,213 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 _cro_text_start:
     // reset stack
     mov sp, #0x10000000
-    bl main
+    blx main
     // exit if main returns
     svc 3
 
-.align 2, 0
-.arm
+.align 1
+.thumb
 main:
-    stmfd sp!, {r4-r6,lr}
-    sub sp, sp, #0x14
+    push {r4-r6,lr}
+    sub sp, #0x14
     // open extdata archive
-    mov r0, sp // archive handle pointer
-    bl archive_open_extdata
+    add r0, sp, #0x8 // archive handle pointer
+    mov r1, #6 // archive id
+    mov r2, #2 // path type
+    mov r3, #0xc // path size
+    adr r4, extdata_archive_path
+    str r4, [sp]
+    bl FSUSER_OpenArchive
     // open otherapp file
-    mov r0, sp // archive handle pointer
-    add r1, sp, #8 // file handle pointer
-    mov r2, #1
-    bl file_open_otherapp
+    add r0, sp, #0x10 // file handle pointer
+    add r1, sp, #0x8 // archive handle pointer
+    mov r2, #3 // path type
+    mov r3, #0xa // path size
+    mov r4, #1
+    str r4, [sp] // open flags
+    adr r4, otherapp_file_path
+    str r4, [sp,#4] // path
+    bl FSUSER_OpenFile
     // get otherapp size
-    add r0, sp, #8 // file handle pointer
-    add r1, sp, #0xc // size output pointer
-    bl file_get_size
+    add r0, sp, #0x10 // file handle pointer
+    mov r1, sp // size output pointer
+    bl FSFILE_GetSize
     // round otherapp size to nearest page
-    ldr r5, [sp,#0xc]
+    ldr r6, [sp]
     ldr r0, =0xfff
-    add r5, r5, r0
-    bic r5, r5, r0
+    add r6, r6, r0
+    bic r6, r0
     // malloc linear for otherapp
-    mov r0, r5 // size
+    mov r0, r6 // size
     bl malloc_linear
-    mov r4, r0
+    mov r5, r0
     // read otherapp file to linear
-    add r0, sp, #8 // file handle pointer
-    add r1, sp, #0xc // bytes read pointer
-    mov r2, r4 // buffer
-    ldr r3, [sp,#0xc] // size
-    bl file_read
+    add r0, sp, #0x10 // file handle pointer
+    mov r1, sp // bytes read pointer
+    mov r2, #0 // file offset (low)
+    mov r3, #0 // file offset (high)
+    str r5, [sp,#4] // buffer
+    bl FSFILE_Read
     // close otherapp file
-    add r0, sp, #8 // file handle pointer
-    bl file_close
+    add r0, sp, #0x10 // file handle pointer
+    bl FSFILE_Close
     // close extdata archive
-    mov r0, sp // archive handle pointer
-    bl archive_close
+    add r0, sp, #0x8 // archive handle pointer
+    bl FSUSER_CloseArchive
     // flush data cache for linear buffer
-    mov r0, r4 // addr
-    mov r1, r5 // size
-    bl flush_dcache
+    mov r0, r5 // addr
+    mov r1, r6 // size
+    bl GSPGPU_FlushDataCache
     // gspwn otherapp from linear buffer to code
     ldr r0, =OTHERAPP_VA // dst
-    mov r1, r4 // src
-    mov r2, r5 // size
+    mov r1, r5 // src
+    mov r2, r6 // size
     bl gspwn_aslr
     // clear instruction cache
     bl invalidate_icache
     // setup paramblk in linear buffer
-    mov r0, r4
-    ldr r2, =GX_TEXTURECOPY
-    str r2, [r0, #0x1c]
-    ldr r2, =GSPGPU_FLUSHDATACACHE
-    str r2, [r0, #0x20]
-    ldr r2, =GSPGPU_HANDLE_PTR
-    str r2, [r0, #0x58]
+    ldr r0, =GX_TEXTURECOPY
+    str r0, [r5, #0x1c]
+    ldr r0, =GSPGPU_FLUSHDATACACHE
+    str r0, [r5, #0x20]
+    ldr r0, =GSPGPU_HANDLE_PTR
+    str r0, [r5, #0x58]
     // jump to otherapp code
-    mov r1, #0x10000000
-    sub r1, r1, #4
+    mov r0, r5
+    ldr r1, =0x0ffffffc
     ldr r2, =OTHERAPP_VA
     blx r2
-    add sp, sp, #0x14
-    ldmfd sp!, {r4-r6,pc}
+    add sp, #0x14
+    pop {r4-r6,pc}
+.pool
+extdata_archive_path:
+    .word 0x1
+    .word EXTDATA_ID
+    .word 0
+otherapp_file_path:
+    .asciz "/otherapp"
 
+.align 1
+.thumb
+malloc_heap: // size
+    mov r1, r0 // size
+    ldr r0, =MTCTRHEAPALLOCATOR_INSTANCE_PTR
+    ldr r0, [r0] // this
+    mov r2, #1
+    lsl r2, r2, #0xc // alignment
+    ldr r3, =MTCTRHEAPALLOCATOR_MALLOC
+    bx r3
 .pool
 
-.align 2, 0
-.arm
-gspwn_aslr:
-    stmfd sp!, {r4-r10,lr}
+.align 1
+.thumb
+malloc_linear: // size
+    mov r1, r0 // size
+    ldr r0, =MTEXHEAPALLOCATOR_INSTANCE_PTR
+    ldr r0, [r0] // this
+    mov r2, #1
+    lsl r2, r2, #0xc // alignment
+    ldr r3, =MTEXHEAPALLOCATOR_MALLOC
+    bx r3
+.pool
+
+.align 1
+.thumb
+memcpy: // dst, src, size
+    ldr r3, =MEMCPY
+    bx r3
+.pool
+
+.align 1
+.thumb
+memclr32: // addr, size
+    mov r2, #3
+    bic r1, r2
+    mov r2, #0
+_memclr32_clear_loop:
+    str r2, [r0]
+    add r0, r0, #4
+    sub r1, r1, #4
+    cmp r1, #0
+    bne _memclr32_clear_loop
+    bx lr
+
+.align 1
+.thumb
+memcmp32: // addr1, addr2, size
+    push {r4,lr}
+    mov r3, #3
+    bic r2, r3
+_memcmp32_compare_loop:
+    ldr r3, [r0]
+    add r0, r0, #4
+    ldr r4, [r1]
+    add r1, r1, #4
+    cmp r3, r4
+    bne _memcmp32_return
+    sub r2, r2, #4
+    cmp r2, #0
+    bne _memcmp32_compare_loop
+    mov r0, #0
+    pop {r4,pc}
+_memcmp32_return:
+    mov r0, #1
+    pop {r4,pc}
+
+.align 1
+.thumb
+gspwn_aslr: // dst, src, size
+    push {r4-r7,lr}
     mov r4, r0
     add r5, r0, r2
     lsr r6, r2, #0xc
-    mov r7, r1
-    mov r0, #0x1000 // size
+    ldr r7, =CODEBIN_START_LINEAR
+    mov r8, r1
+    ldr r0, =0x1000 // size
     bl malloc_linear
-    mov r8, r0
-    ldr r9, =CODEBIN_START_LINEAR
+    mov r9, r0
 _gspwn_aslr_linear_loop:
-    mov r0, r8 // dst
-    mov r1, r9 // src
-    mov r2, #0x1000 // size
+    mov r0, r9 // dst
+    mov r1, r7 // src
+    ldr r2, =0x1000 // size
     bl gspwn
-    mov r0, r8 // addr
-    mov r1, #0x1000 // size
-    bl invalidate_dcache
+    mov r0, r9 // addr
+    ldr r1, =0x1000 // size
+    bl GSPGPU_InvalidateDataCache
     mov r10, r4
 _gspwn_aslr_virtual_loop:
     mov r0, r10 // addr1
-    mov r1, r8 // addr2
-    mov r2, #0x100 // size
+    mov r1, r9 // addr2
+    ldr r2, =0x100 // size
     bl memcmp32
     cmp r0, #0
     beq _gspwn_aslr_found_page
-    add r10, r10, #0x1000
+    ldr r0, =0x1000
+    add r10, r0
     cmp r10, r5
     bne _gspwn_aslr_virtual_loop
-    add r9, r9, #0x1000
+    add r7, r7, r0
     b _gspwn_aslr_linear_loop
 _gspwn_aslr_found_page:
-    mov r0, r9 // dst
-    sub r1, r10, r4
-    add r1, r1, r7 // src
-    mov r2, #0x1000 // size
+    mov r0, r7 // dst
+    mov r1, r10
+    sub r1, r1, r4
+    add r1, r8 // src
+    ldr r2, =0x1000 // size
     bl gspwn
-    add r9, r9, #0x1000
+    ldr r0, =0x1000
+    add r7, r7, r0
     sub r6, r6, #1
     cmp r6, #0
     bne _gspwn_aslr_linear_loop
-    ldmfd sp!, {r4-r10,pc}
-
+    pop {r4-r7,pc}
 .pool
 
-.align 2, 0
-.arm
-gspwn:
-    stmfd sp!, {r4,lr}
-    sub sp, sp, #0x10
+.align 1
+.thumb
+gspwn: // dst, src, size
+    push {r4,lr}
+    sub sp, #0x10
     mov r3, r0
     mov r0, r1 // src
     mov r1, r3 // dst
@@ -203,106 +287,35 @@ gspwn:
     str r4, [sp,#0xc] // flags
     ldr r4, =GX_TEXTURECOPY
     blx r4
-    mov r0, #0x100000 // nanoseconds (low)
-    mov r1, #0 // nanoseconds (high)
+    mov r0, #1
+    lsl r0, r0, #0x14
+    mov r1, #0
     svc 0xa
-    add sp, sp, #0x10
-    ldmfd sp!, {r4,pc}
+    add sp, #0x10
+    pop {r4,pc}
 
-.pool
-
-.align 2, 0
-.arm
-memcmp32:
-    stmfd sp!, {r4,lr}
-_memcmp32_compare_loop:
-    ldr r3, [r0],#4
-    ldr r4, [r1],#4
-    cmp r3, r4
-    movne r0, #1
-    bne _memcmp32_return
-    sub r2, r2, #4
-    cmp r2, #0
-    bne _memcmp32_compare_loop
-    mov r0, #0
-_memcmp32_return:
-    ldmfd sp!, {r4,pc}
-
-.align 2, 0
-.arm
-malloc_heap:
-    mov r1, r0 // size
-    ldr r0, =MTCTRHEAPALLOCATOR_INSTANCE_PTR
-    ldr r0, [r0] // this
-    mov r2, #0x1000 // alignment
-    ldr r3, =MTCTRHEAPALLOCATOR_MALLOC
-    bx r3
-
-.pool
-
-.align 2, 0
-.arm
-malloc_linear:
-    mov r1, r0 // size
-    ldr r0, =MTEXHEAPALLOCATOR_INSTANCE_PTR
-    ldr r0, [r0] // this
-    mov r2, #0x1000 // alignment
-    ldr r3, =MTEXHEAPALLOCATOR_MALLOC
-    bx r3
-
-.pool
-
-.align 2, 0
-.arm
-flush_dcache:
-    ldr r2, =GSPGPU_FLUSHDATACACHE
-    bx r2
-
-.pool
-
-.align 2, 0
-.arm
-invalidate_dcache:
-    stmfd sp!, {r4,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    ldr r2, =0x90082 // header code
-    str r2, [r4,#0x80]!
-    str r0, [r4,#4] // addr
-    str r1, [r4,#8] // size
-    mov r2, #0
-    str r2, [r4,#0xc] // zero
-    ldr r2, =0xffff8001
-    str r2, [r4,#0x10] // kprocess handle
-    ldr r0, =GSPGPU_HANDLE_PTR
-    ldr r0, [r0] // service handle
-    svc 0x32
-    and r1, r0, #0x80000000
-    cmp r1, #0
-    ldrge r0, [r4,#4]
-    ldmfd sp!, {r4,pc}
-
-.pool
-
-.align 2, 0
-.arm
+.align 1
+.thumb
 invalidate_icache:
-    stmfd sp!, {r4,r5,lr}
-    sub sp, sp, #4
-    mov r0, #ICACHE_SIZE+0x2000 // size
+    push {r4,r5,lr}
+    sub sp, #4
+    ldr r0, =ICACHE_SIZE+0x2000 // size
     bl malloc_heap
     mov r4, r0 // addr
-    mov r1, #ICACHE_SIZE+0x2000 // size
+    ldr r1, =ICACHE_SIZE+0x2000 // size
     bl memclr32
     mov r0, r4 // dst
     adr r1, nopsled_header // src
-    mov r2, #nopsled_tables-nopsled_header // size
+    mov r2, #0xff
+    add r2, r2, #0x35 // size
     bl memcpy
-    add r0, r4, #ICACHE_SIZE+0x1000 // dst
+    ldr r0, =ICACHE_SIZE+0x1000
+    add r0, r0, r4 // dst
     adr r1, nopsled_tables // src
-    mov r2, #nopsled_crr_hash-nopsled_tables // size
+    mov r2, #0x70 // size
     bl memcpy
-    add r0, r4, #ICACHE_SIZE
-    add r0, r0, #0x180
+    ldr r0, =ICACHE_SIZE+0x180
+    add r0, r0, r4
     ldr r1, =0xe12fff1e
     str r1, [r0]
     adr r0, nopsled_crr_hash // hash
@@ -312,46 +325,27 @@ invalidate_icache:
     mov r0, sp // fixed size
     mov r1, r4 // addr
     mov r2, r5 // mapped addr
-    mov r3, #ICACHE_SIZE+0x2000 // size
-    bl load_cro
-    add r5, r5, #0x180
+    ldr r3, =ICACHE_SIZE+0x2000 // size
+    bl LDRRO_LoadCRO_New
+    add r5, r5, #0xff
+    add r5, r5, #0x81
     blx r5
-    add sp, sp, #4
-    ldmfd sp!, {r4,r5,pc}
-
+    add sp, #4
+    pop {r4,r5,pc}
 .pool
 nopsled_header:
-.incbin CRO_FILE_PATH, 0, 0x134
+    .incbin CRO_FILE_PATH, 0, 0x134
 nopsled_tables:
-.incbin CRO_FILE_PATH, ICACHE_SIZE+0x1000, 0x70
+    .incbin CRO_FILE_PATH, ICACHE_SIZE+0x1000, 0x70
 nopsled_crr_hash:
-.incbin CRO_FILE_PATH, ICACHE_SIZE+0x2000-0x20, 0x20
+    .incbin CRO_FILE_PATH, ICACHE_SIZE+0x2000-0x20, 0x20
 
-.align 2, 0
-.arm
-memclr32:
-    mov r2, #0
-_memclr32_clear_loop:
-    str r2, [r0],#4
-    sub r1, r1, #4
-    cmp r1, #0
-    bne _memclr32_clear_loop
-    bx lr
-
-.align 2, 0
-.arm
-memcpy:
-    ldr r3, =MEMCPY
-    bx r3
-
-.pool
-
-.align 2, 0
-.arm
-patch_crr:
-    stmfd sp!, {r4-r6,lr}
+.align 1
+.thumb
+patch_crr: // hash_ptr
+    push {r4-r6,lr}
     mov r4, r0
-    mov r0, #CRR_HASH_COUNT*0x20 // size
+    ldr r0, =CRR_HASH_COUNT*0x20 // size
     bl malloc_linear
     mov r5, r0
     mov r6, #0
@@ -361,29 +355,236 @@ _patch_crr_copy_loop:
     mov r2, #0x20 // size
     bl memcpy
     add r6, r6, #0x20
-    cmp r6, #CRR_HASH_COUNT*0x20
+    ldr r0, =CRR_HASH_COUNT*0x20
+    cmp r6, r0
     bne _patch_crr_copy_loop
     mov r0, r5 // addr
-    mov r1, #CRR_HASH_COUNT*0x20 // size
-    bl flush_dcache
+    ldr r1, =CRR_HASH_COUNT*0x20 // size
+    bl GSPGPU_FlushDataCache
     ldr r0, =CRR_START_LINEAR+0x360 // dst
     mov r1, r5 // src
-    mov r2, #CRR_HASH_COUNT*0x20 // size
+    ldr r2, =CRR_HASH_COUNT*0x20 // size
     bl gspwn
-    ldmfd sp!, {r4-r6,pc}
-
+    pop {r4-r6,pc}
 .pool
 
-.align 2, 0
+.align 2
 .arm
-load_cro:
-    stmfd sp!, {r4,r5,lr}
-    mrc p15, 0, r4, c13, c0, 3
+_get_command_buffer:
+    mrc p15, 0, r0, c13, c0, 3
+    add r0, r0, #0x80
+    bx lr
+
+.align 1
+.thumb
+FSUSER_OpenFile: // file_handle_ptr, archive_handle_ptr, path_type, path_size, open_flags, path
+    push {r4,r5,lr}
     mov r5, r0
-    ldr r0, =0x902c2 // header code
-    str r0, [r4,#0x80]!
-    add r0, r4, #4
-    stmia r0, {r1-r3} // addr, mapped addr, size
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x80201c2
+    str r0, [r4] // header code
+    mov r0, #0
+    str r0, [r4,#4] // transaction
+    ldr r0, [r1]
+    str r0, [r4,#8] // archive handle (low)
+    ldr r0, [r1,#4]
+    str r0, [r4,#0xc] // archive handle (high)
+    str r2, [r4,#0x10] // path type
+    str r3, [r4,#0x14] // path size
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0x18] // open flags
+    mov r0, #0
+    str r0, [r4,#0x1c] // attributes
+    lsl r3, r3, #0xe
+    mov r0, #2
+    orr r3, r0
+    str r3, [r4,#0x20] // path size
+    ldr r0, [sp,#0x10]
+    str r0, [r4,#0x24] // path
+    ldr r0, =FSUSER_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _FSUSER_OpenFile_return
+    ldr r0, [r4,#0xc]
+    str r0, [r5] // file handle
+    ldr r0, [r4,#4]
+_FSUSER_OpenFile_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+FSUSER_OpenArchive: // archive_handle_ptr, archive_id, path_type, path_size, path
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x80c00c2
+    str r0, [r4] // header code
+    str r1, [r4,#4] // archive id
+    str r2, [r4,#8] // path type
+    str r3, [r4,#0xc] // path size
+    lsl r3, r3, #0xe
+    mov r0, #2
+    orr r3, r0
+    str r3, [r4,#0x10] // path size
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0x14] // path
+    ldr r0, =FSUSER_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _FSUSER_OpenArchive_return
+    ldr r0, [r4,#8]
+    str r0, [r5] // archive handle (low)
+    ldr r0, [r4,#0xc]
+    str r0, [r5,#4] // archive handle (high)
+    ldr r0, [r4,#4]
+_FSUSER_OpenArchive_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+FSUSER_CloseArchive: // archive_handle_ptr
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x80e0080
+    str r0, [r4] // header code
+    ldr r0, [r2]
+    str r0, [r4,#4] // archive handle (low)
+    ldr r0, [r2,#4]
+    str r0, [r4,#8] // archive handle (high)
+    ldr r0, =FSUSER_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _FSUSER_CloseArchive_return
+    ldr r0, [r4,#4]
+_FSUSER_CloseArchive_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+FSFILE_Read: // file_handle_ptr, bytes_read_ptr, file_offset_low, file_offset_high, size, buffer
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x80200c2
+    str r0, [r4] // header code
+    str r2, [r4,#4] // file offset (low)
+    str r3, [r4,#8] // file offset (high)
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0xc] // size
+    lsl r0, r0, #4
+    mov r2, #0xc
+    orr r0, r2
+    str r0, [r4,#0x10] // size
+    ldr r0, [sp,#0x10]
+    str r0, [r4,#0x14] // buffer
+    ldr r0, [r5] // file handle
+    mov r5, r1
+    svc 0x32
+    cmp r0, #0
+    blt _FSFILE_Read_return
+    ldr r0, [r4,#0x8]
+    str r0, [r5] // bytes read
+    ldr r0, [r4,#4]
+_FSFILE_Read_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+FSFILE_GetSize: // file_handle_ptr, file_size_ptr
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x8040000
+    str r0, [r4] // header code
+    ldr r0, [r5] // file handle
+    mov r5, r1
+    svc 0x32
+    cmp r0, #0
+    blt _FSFILE_GetSize_return
+    ldr r0, [r4,#8]
+    str r0, [r5] // file size (low)
+    ldr r0, [r4,#0xc]
+    str r0, [r5,#4] // file size (high)
+    ldr r0, [r4,#4]
+_FSFILE_GetSize_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+FSFILE_Close: // file_handle_ptr
+    push {r4,lr}
+    mov r1, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x8080000
+    str r0, [r4] // header code
+    ldr r0, [r1] // file handle
+    svc 0x32
+    cmp r0, #0
+    blt _FSFILE_Close_return
+    ldr r0, [r4,#4]
+_FSFILE_Close_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+GSPGPU_FlushDataCache: // addr, size
+    ldr r2, =GSPGPU_FLUSHDATACACHE
+    bx r2
+.pool
+
+.align 1
+.thumb
+GSPGPU_InvalidateDataCache: // addr, size
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x90082
+    str r0, [r4] // header code
+    str r2, [r4,#4] // addr
+    str r1, [r4,#8] // size
+    mov r0, #0
+    str r0, [r4,#0xc] // zero
+    ldr r0, =0xffff8001
+    str r0, [r4,#0x10] // kprocess handle
+    ldr r0, =GSPGPU_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _GSPGPU_InvalidateDataCache_return
+    ldr r0, [r4,#4]
+_GSPGPU_InvalidateDataCache_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+LDRRO_LoadCRO_New: // fixed_size, addr, mapped_addr, size
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x902c2
+    str r0, [r4] // header code
+    str r1, [r4,#4] // addr
+    str r2, [r4,#8] // mapped addr
+    str r3, [r4,#0xc] // size
     mov r0, #0
     mov r1, #1
     str r0, [r4,#0x10] // data addr
@@ -400,164 +601,13 @@ load_cro:
     ldr r0, =LDRRO_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    ands r1, r0, #0x80000000
-    bmi _load_cro_return
+    cmp r0, #0
+    blt _LDRRO_LoadCRO_New_return
     ldr r0, [r4,#8]
     str r0, [r5] // fixed size
     ldr r0, [r4,#4]
-_load_cro_return:
-    ldmfd sp!, {r4,r5,pc}
-
-.pool
-
-.align 2, 0
-.arm
-archive_open_extdata:
-    stmfd sp!, {r4-r7,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    mov r5, r0
-    ldr r0, =0x80c00c2 // header code
-    str r0, [r4,#0x80]!
-    mov r0, #6 // archive id
-    mov r1, #2 // path type
-    mov r2, #0xc // path size
-    ldr r3, =(0xc<<14)|2 // path size
-    adr r6, extdata_path // path
-    add r7, r4, #4
-    stmia r7, {r0-r3,r6}
-    ldr r0, =FSUSER_HANDLE_PTR
-    ldr r0, [r0] // service handle
-    svc 0x32
-    ands r1, r0, #0x80000000
-    bmi _archive_open_extdata_return
-    ldrd r0, [r4,#8]
-    strd r0, [r5] // archive handle
-    ldr r0, [r4,#4]
-_archive_open_extdata_return:
-    ldmfd sp!, {r4-r7,pc}
-
-.pool
-extdata_path:
-    .word 0x1
-    .word EXTDATA_ID
-    .word 0
-
-.align 2, 0
-.arm
-file_open_otherapp:
-    stmfd sp!, {r4-r11,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    mov r5, r1
-    mov r7, r2 // open flags
-    ldrd r0, [r0]
-    mov r2, r1 // archive handle (high)
-    mov r1, r0 // archive handle (low)
-    ldr r0, =0x80201c2 // header code
-    str r0, [r4,#0x80]!
-    mov r0, #0 // zero
-    mov r3, #3 // path type
-    mov r6, #0xa // path size
-    mov r8, #0 // attributes
-    ldr r9, =(0xa<<14)|2 // path size
-    adr r10, otherapp_path // path
-    add r11, r4, #4
-    stmia r11, {r0-r3,r6-r10}
-    ldr r0, =FSUSER_HANDLE_PTR
-    ldr r0, [r0] // service handle
-    svc 0x32
-    ands r1, r0, #0x80000000
-    bmi _file_open_otherapp_return
-    ldr r0, [r4,#0xc]
-    str r0, [r5] // file handle
-    ldr r0, [r4,#4]
-_file_open_otherapp_return:
-    ldmfd sp!, {r4-r11,pc}
-
-.pool
-otherapp_path:
-    .asciz "/otherapp"
-
-.align 2, 0
-.arm
-archive_close:
-    stmfd sp!, {r4,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    ldr r1, =0x80e0080 // header code
-    str r1, [r4,#0x80]!
-    ldrd r0, [r0]
-    strd r0, [r4,#4] // archive handle
-    ldr r0, =FSUSER_HANDLE_PTR
-    ldr r0, [r0] // service handle
-    svc 0x32
-    and r1, r0, #0x80000000
-    cmp r1, #0
-    ldrge r0, [r4,#4]
-    ldmfd sp!, {r4,pc}
-
-.pool
-
-.align 2, 0
-.arm
-file_get_size:
-    stmfd sp!, {r4,r5,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    ldr r5, =0x8040000 // header code
-    str r5, [r4,#0x80]!
-    mov r5, r1
-    ldr r0, [r0] // file handle
-    svc 0x32
-    ands r1, r0, #0x80000000
-    bmi _file_get_size_return
-    ldrd r0, [r4,#8]
-    strd r0, [r5] // size
-    ldr r0, [r4,#4]
-_file_get_size_return:
-    ldmfd sp!, {r4,r5,pc}
-
-.pool
-
-.align 2, 0
-.arm
-file_read:
-    stmfd sp!, {r4,r5,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    ldr r5, =0x80200c2 // header code
-    str r5, [r4,#0x80]!
-    mov r5, #0
-    str r5, [r4,#4] // offset (low)
-    str r5, [r4,#8] // offset (high)
-    str r3, [r4,#0xc] // size
-    mov r5, #0xc
-    orr r5, r5, r3,lsl#4
-    str r5, [r4,#0x10] // size
-    str r2, [r4,#0x14] // buffer
-    mov r5, r1
-    ldr r0, [r0] // file handle
-    svc 0x32
-    ands r1, r0, #0x80000000
-    bmi _file_read_return
-    ldr r0, [r4,#0x8]
-    str r0, [r5] // bytes read
-    ldr r0, [r4,#4]
-_file_read_return:
-    ldmfd sp!, {r4,r5,pc}
-
-.pool
-
-.align 2, 0
-.arm
-file_close:
-    stmfd sp!, {r4,lr}
-    mrc p15, 0, r4, c13, c0, 3
-    ldr r1, =0x8080000 // header code
-    str r1, [r4,#0x80]!
-    ldr r0, [r0] // file handle
-    svc 0x32
-    and r1, r0, #0x80000000
-    cmp r1, #0
-    ldrge r0, [r4,#4]
-    ldmfd sp!, {r4,pc}
-
+_LDRRO_LoadCRO_New_return:
+    pop {r4,r5,pc}
 .pool
 
 _cro_text_end:
