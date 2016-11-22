@@ -416,6 +416,76 @@ _FSUSER_OpenFile_return:
 
 .align 1
 .thumb
+FSUSER_DeleteFile: // archive_handle_ptr, path_type, path_size, path
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x8040142
+    str r0, [r4] // header code
+    mov r0, #0
+    str r0, [r4,#4] // transaction
+    ldr r0, [r5]
+    str r0, [r4,#8] // archive handle (low)
+    ldr r0, [r5,#4]
+    str r0, [r4,#0xc] // archive handle (high)
+    str r1, [r4,#0x10] // path type
+    str r2, [r4,#0x14] // path size
+    lsl r2, r2, #0xe
+    mov r0, #2
+    orr r2, r0
+    str r2, [r4,#0x18] // path size
+    str r3, [r4,#0x1c] // path
+    ldr r0, =FSUSER_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _FSUSER_DeleteFile_return
+    ldr r0, [r4,#4]
+_FSUSER_DeleteFile_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+FSUSER_CreateFile: // archive_handle_ptr, path_type, path_size, file_size_low, file_size_high, path
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x8080202
+    str r0, [r4] // header code
+    mov r0, #0
+    str r0, [r4,#4] // transaction
+    ldr r0, [r5]
+    str r0, [r4,#8] // archive handle (low)
+    ldr r0, [r5,#4]
+    str r0, [r4,#0xc] // archive handle (high)
+    str r1, [r4,#0x10] // path type
+    str r2, [r4,#0x14] // path size
+    mov r0, #0
+    str r0, [r4,#0x18] // attributes
+    str r3, [r4,#0x1c] // file size (low)
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0x20] // file size (high)
+    lsl r2, r2, #0xe
+    mov r0, #2
+    orr r2, r0
+    str r2, [r4,#0x24] // path size
+    ldr r0, [sp,#0x10]
+    str r0, [r4,#0x28] // path
+    ldr r0, =FSUSER_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _FSUSER_CreateFile_return
+    ldr r0, [r4,#4]
+_FSUSER_CreateFile_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
 FSUSER_OpenArchive: // archive_handle_ptr, archive_id, path_type, path_size, path
     push {r4,r5,lr}
     mov r5, r0
@@ -497,6 +567,39 @@ FSFILE_Read: // file_handle_ptr, bytes_read_ptr, file_offset_low, file_offset_hi
     str r0, [r5] // bytes read
     ldr r0, [r4,#4]
 _FSFILE_Read_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+FSFILE_Write: // file_handle_ptr, bytes_written_ptr, file_offset_low, file_offset_high, size, buffer
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x8030102
+    str r0, [r4] // header code
+    str r2, [r4,#4] // file offset (low)
+    str r3, [r4,#8] // file offset (high)
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0xc] // size
+    mov r0, #1
+    str r0, [r4,#0x10] // write option
+    lsl r0, r0, #4
+    mov r2, #0xa
+    orr r0, r2
+    str r0, [r4,#0x14] // size
+    ldr r0, [sp,#0x10]
+    str r0, [r4,#0x18] // buffer
+    ldr r0, [r5] // file handle
+    mov r5, r1
+    svc 0x32
+    cmp r0, #0
+    blt _FSFILE_Write_return
+    ldr r0, [r4,#0x8]
+    str r0, [r5] // bytes written
+    ldr r0, [r4,#4]
+_FSFILE_Write_return:
     pop {r4,r5,pc}
 .pool
 
