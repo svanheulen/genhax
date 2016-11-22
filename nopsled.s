@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "constants.h"
 
 .org 0x80, 0
-    .word 0x304f5243 // magic
+    .ascii "CRO0" // magic
     .word _cro_module_name // module name offset
     .word 0 // next cro pointer
     .word 0 // previous cro pointer
