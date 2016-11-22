@@ -189,9 +189,10 @@ memcpy: // dst, src, size
 .align 1
 .thumb
 memclr32: // addr, size
-    mov r2, #3
-    bic r1, r2
     mov r2, #0
+memset32: // addr, size, value
+    mov r3, #3
+    bic r1, r3
 _memclr32_clear_loop:
     str r2, [r0]
     add r0, r0, #4
@@ -673,6 +674,36 @@ GSPGPU_InvalidateDataCache: // addr, size
     blt _GSPGPU_InvalidateDataCache_return
     ldr r0, [r4,#4]
 _GSPGPU_InvalidateDataCache_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+GSPGPU_SetBufferSwap: // framebuffer_addr, screen
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x50200
+    str r0, [r4] // header code
+    str r1, [r4,#4] // screen
+    mov r0, #0
+    str r0, [r4,#8] // active framebuffer
+    str r2, [r4,#0xc] // framebuffer addr (left)
+    str r2, [r4,#0x10] // framebuffer addr (right)
+    ldr r1, =0x1e0
+    str r1, [r4,#0x14] // stride
+    mov r1, #2
+    str r1, [r4,#0x18] // format
+    str r0, [r4,#0x1c] // framebuffer select
+    str r0, [r4,#0x20] // unknown
+    ldr r0, =GSPGPU_HANDLE_PTR
+    ldr r0, [r0] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _GSPGPU_SetBufferSwap_return
+    ldr r0, [r4,#4]
+_GSPGPU_SetBufferSwap_return:
     pop {r4,pc}
 .pool
 
