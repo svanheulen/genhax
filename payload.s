@@ -193,12 +193,11 @@ memclr32: // addr, size
 memset32: // addr, size, value
     mov r3, #3
     bic r1, r3
-_memclr32_clear_loop:
+_memset32_set_loop:
     str r2, [r0]
     add r0, r0, #4
     sub r1, r1, #4
-    cmp r1, #0
-    bne _memclr32_clear_loop
+    bne _memset32_set_loop
     bx lr
 
 .align 1
@@ -213,13 +212,12 @@ _memcmp32_compare_loop:
     ldr r4, [r1]
     add r1, r1, #4
     cmp r3, r4
-    bne _memcmp32_return
+    bne _memcmp32_mismatch
     sub r2, r2, #4
-    cmp r2, #0
     bne _memcmp32_compare_loop
     mov r0, #0
     pop {r4,pc}
-_memcmp32_return:
+_memcmp32_mismatch:
     mov r0, #1
     pop {r4,pc}
 
@@ -381,7 +379,6 @@ _gspwn_aslr_found_page:
     ldr r0, =0x1000
     add r7, r7, r0
     sub r6, r6, #1
-    cmp r6, #0
     bne _gspwn_aslr_linear_loop
     pop {r4-r7,pc}
 .pool
@@ -807,15 +804,14 @@ GSPGPU_SetBufferSwap: // framebuffer_addr, screen
     str r2, [r4,#0x10] // framebuffer addr (right)
     ldr r2, =0x1e0
     str r2, [r4,#0x14] // stride
+    mov r2, #2
     cmp r1, #0
     bne _GSPGPU_SetBufferSwap_bottom
-    mov r1, #0xff
-    add r1, r1, #0x43
-    b _GSPGPU_SetBufferSwap_top
+    add r2, r2, #0xff
+    add r2, r2, #0x41
 _GSPGPU_SetBufferSwap_bottom:
-    mov r1, #2
-_GSPGPU_SetBufferSwap_top:
-    str r1, [r4,#0x18] // format
+    mov r2, #2
+    str r2, [r4,#0x18] // format
     str r0, [r4,#0x1c] // framebuffer select
     str r0, [r4,#0x20] // unknown
     ldr r0, =GSPGPU_HANDLE_PTR
