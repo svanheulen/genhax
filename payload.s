@@ -861,6 +861,34 @@ _LDRRO_LoadCRO_New_return:
     pop {r4,r5,pc}
 .pool
 
+.align 1
+.thumb
+SRV_GetServiceHandle: // handle_ptr, name, name_len
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x50100
+    str r0, [r4] // header code
+    ldr r0, [r1]
+    str r0, [r4,#4] // name (low)
+    ldr r0, [r1,#4]
+    str r0, [r4,#8] // name (high)
+    str r2, [r4,#0xc] // name size
+    mov r0, #0
+    str r0, [r4,#0x10] // flags
+    ldr r0, =SRV_HANDLE_PTR
+    ldr r0, [r0] // port handle
+    svc 0x32
+    cmp r0, #0
+    blt _SRV_GetServiceHandle_return
+    ldr r0, [r4,#0xc]
+    str r0, [r5] // service handle
+    ldr r0, [r4,#4]
+_SRV_GetServiceHandle_return:
+    pop {r4,r5,pc}
+.pool
+
 _cro_text_end:
 
 .align 12, 0

@@ -56,6 +56,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define GSPGPU_HANDLE_PTR REGION_CONST(0xddd4e4, 0xdc627c, 0xdc627c)
 #define FSUSER_HANDLE_PTR REGION_CONST(0xdcfe30, 0xdb82e8, 0xdb82e8)
 #define LDRRO_HANDLE_PTR REGION_CONST(0xdd08d0, 0xdb91a4, 0xdb91a4)
+#define SRV_HANDLE_PTR REGION_CONST(0xdddce0, 0xdc6a78, 0xdc6a78)
 // linear offsets
 #define CODEBIN_SIZE REGION_CONST(0xd01000, 0xcea000, 0xcea000)
 #define BSS_SIZE REGION_CONST(0x5d818, 0x721cc, 0x721cc)
