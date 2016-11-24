@@ -405,6 +405,7 @@ gspwn: // dst, src, size
     svc 0xa
     add sp, #0x10
     pop {r4,pc}
+.pool
 
 .align 1
 .thumb
@@ -863,7 +864,7 @@ _LDRRO_LoadCRO_New_return:
 
 .align 1
 .thumb
-SRV_GetServiceHandle: // handle_ptr, name, name_len
+SRV_GetServiceHandle: // service_handle_ptr, service_name, service_name_len
     push {r4,r5,lr}
     mov r5, r0
     blx _get_command_buffer
@@ -871,10 +872,10 @@ SRV_GetServiceHandle: // handle_ptr, name, name_len
     ldr r0, =0x50100
     str r0, [r4] // header code
     ldr r0, [r1]
-    str r0, [r4,#4] // name (low)
+    str r0, [r4,#4] // service name (low)
     ldr r0, [r1,#4]
-    str r0, [r4,#8] // name (high)
-    str r2, [r4,#0xc] // name size
+    str r0, [r4,#8] // service name (high)
+    str r2, [r4,#0xc] // service name length
     mov r0, #0
     str r0, [r4,#0x10] // flags
     ldr r0, =SRV_HANDLE_PTR
@@ -887,6 +888,305 @@ SRV_GetServiceHandle: // handle_ptr, name, name_len
     ldr r0, [r4,#4]
 _SRV_GetServiceHandle_return:
     pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_Initialize: // service_handle_ptr
+    push {r4,lr}
+    mov r1, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x10044
+    str r0, [r4] // header code
+    mov r0, #0
+    str r0, [r4,#4] // POST buffer size
+    mov r2, #0x20
+    str r2, [r4,#8] // unknown
+    str r0, [r4,#0xc] // unknown
+    str r0, [r4,#0x10] // unknown
+    str r0, [r4,#0x14] // POST buffer handle
+    ldr r0, [r1] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_Initialize_return
+    ldr r0, [r4,#4]
+_HTTPC_Initialize_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_CreateContext: // service_handle_ptr, url_buffer, url_buffer_size, context_handle_ptr
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x20082
+    str r0, [r4] // header code
+    str r2, [r4,#4] // url buffer size
+    mov r0, #1
+    str r0, [r4,#8] // request method
+    mov r0, #0xa
+    lsl r2, r2, #4
+    orr r2, r0
+    str r2, [r4,#0xc] // url buffer size
+    str r1, [r4,#0x10] // url buffer
+    ldr r0, [r5] // service handle
+    mov r5, r3
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_CreateContext_return
+    ldr r0, [r4,#8]
+    str r0, [r5] // context handle
+    ldr r0, [r4,#4]
+_HTTPC_CreateContext_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_CloseContext: // service_handle_ptr, context_handle_ptr
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x30040
+    str r0, [r4] // header code
+    ldr r1, [r1]
+    str r1, [r4,#4] // context handle
+    ldr r0, [r2] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_CloseContext_return
+    ldr r0, [r4,#4]
+_HTTPC_CloseContext_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_GetDownloadSizeState: // service_handle_ptr, context_handle_ptr, downloaded_ptr, total_ptr
+    push {r4-r6,lr}
+    mov r5, r0
+    mov r6, r3
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x60040
+    str r0, [r4] // header code
+    ldr r1, [r1]
+    str r1, [r4,#4] // context handle
+    ldr r0, [r5] // service handle
+    mov r5, r2
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_GetDownloadSizeState_return
+    ldr r0, [r4,#8]
+    str r0, [r5] // downloaded
+    ldr r0, [r4,#0xc]
+    str r0, [r6] // total
+    ldr r0, [r4,#4]
+_HTTPC_GetDownloadSizeState_return:
+    pop {r4-r6,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_InitializeConnectionSession: // service_handle_ptr, context_handle_ptr
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x80042
+    str r0, [r4] // header code
+    ldr r1, [r1]
+    str r1, [r4,#4] // context handle
+    mov r0, #0x20
+    str r0, [r4,#8] // unknown
+    ldr r0, [r2] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_InitializeConnectionSession_return
+    ldr r0, [r4,#4]
+_HTTPC_InitializeConnectionSession_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_BeginRequest: // service_handle_ptr, context_handle_ptr
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x90040
+    str r0, [r4] // header code
+    ldr r1, [r1]
+    str r1, [r4,#4] // context handle
+    ldr r0, [r2] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_BeginRequest_return
+    ldr r0, [r4,#4]
+_HTTPC_BeginRequest_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_ReceiveData: // service_handle_ptr, data_buffer, data_buffer_size, context_handle_ptr
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0xb0082
+    str r0, [r4] // header code
+    ldr r3, [r3]
+    str r3, [r4,#4] // context handle
+    str r2, [r4,#8] // data buffer size
+    mov r0, #0xc
+    lsl r2, r2, #4
+    orr r2, r0
+    str r2, [r4,#0xc] // data buffer size
+    str r1, [r4,#0x10] // data buffer
+    ldr r0, [r5] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_ReceiveData_return
+    ldr r0, [r4,#4]
+_HTTPC_ReceiveData_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_SetProxyDefault: // service_handle_ptr, context_handle_ptr
+    push {r4,lr}
+    mov r2, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0xe0040
+    str r0, [r4] // header code
+    ldr r1, [r1]
+    str r1, [r4,#4] // context handle
+    ldr r0, [r2] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_SetProxyDefault_return
+    ldr r0, [r4,#4]
+_HTTPC_SetProxyDefault_return:
+    pop {r4,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_AddRequestHeader: // service_handle_ptr, name_buffer, name_buffer_size, value_buffer, value_buffer_size, context_handle_ptr
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x1100c4
+    str r0, [r4] // header code
+    ldr r0, [sp,#0x10]
+    ldr r0, [r0]
+    str r0, [r4,#4] // context handle
+    str r2, [r4,#8] // name buffer size
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0xc] // value buffer size
+    ldr r0, =0xc02
+    lsl r2, r2, #0xe
+    orr r2, r0
+    str r2, [r4,#0x10] // name buffer size
+    str r1, [r4,#0x14] // name buffer
+    ldr r2, [sp,#0xc]
+    mov r0, #0xa
+    lsl r2, r2, #4
+    orr r2, r0
+    str r2, [r4,#0x18] // value buffer size
+    str r3, [r4,#0x1c] // value buffer
+    ldr r0, [r5] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_AddRequestHeader_return
+    ldr r0, [r4,#4]
+_HTTPC_AddRequestHeader_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_GetResponseHeader: // service_handle_ptr, name_buffer, name_buffer_size, value_buffer, value_buffer_size, context_handle_ptr
+    push {r4,r5,lr}
+    mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x1e00c4
+    str r0, [r4] // header code
+    ldr r0, [sp,#0x10]
+    ldr r0, [r0]
+    str r0, [r4,#4] // context handle
+    str r2, [r4,#8] // name buffer size
+    ldr r0, [sp,#0xc]
+    str r0, [r4,#0xc] // value buffer size
+    ldr r0, =0xc02
+    lsl r2, r2, #0xe
+    orr r2, r0
+    str r2, [r4,#0x10] // name buffer size
+    str r1, [r4,#0x14] // name buffer
+    ldr r2, [sp,#0xc]
+    mov r0, #0xc
+    lsl r2, r2, #4
+    orr r2, r0
+    str r2, [r4,#0x18] // value buffer size
+    str r3, [r4,#0x1c] // value buffer
+    ldr r0, [r5] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_GetResponseHeader_return
+    ldr r0, [r4,#4]
+_HTTPC_GetResponseHeader_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_GetResponseStatusCode: // service_handle_ptr, status_code_ptr, context_handle_ptr
+    push {r4,r5,lr}
+    mov r5, r1
+    mov r1, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x220040
+    str r0, [r4] // header code
+    ldr r2, [r2]
+    str r2, [r4,#4] // context handle
+    ldr r0, [r1] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_GetResponseStatusCode_return
+    ldr r0, [r4,#8]
+    str r0, [r5]
+    ldr r0, [r4,#4]
+_HTTPC_GetResponseStatusCode_return:
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+HTTPC_Finalize: // service_handle_ptr
+    push {r4,lr}
+    mov r1, r0
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r0, =0x390000
+    str r0, [r4] // header code
+    ldr r0, [r1] // service handle
+    svc 0x32
+    cmp r0, #0
+    blt _HTTPC_Finalize_return
+    ldr r0, [r4,#4]
+_HTTPC_Finalize_return:
+    pop {r4,pc}
 .pool
 
 _cro_text_end:
