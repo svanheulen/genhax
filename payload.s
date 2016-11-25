@@ -319,47 +319,46 @@ font_data:
 .align 1
 .thumb
 gspwn_aslr: // dst, src, size
-    push {r4-r7,lr}
-    mov r4, r0
-    add r5, r0, r2
-    lsr r6, r2, #0xc
-    ldr r7, =CODEBIN_START_LINEAR
-    mov r8, r1
+    push {r0-r2,r4-r7,lr}
+    lsr r4, r2, #0xc
+    ldr r5, =CODEBIN_START_LINEAR
     ldr r0, =0x1000 // size
     bl malloc_linear
-    mov r9, r0
+    mov r6, r0
 _gspwn_aslr_linear_loop:
-    mov r0, r9 // dst
-    mov r1, r7 // src
+    mov r0, r6 // dst
+    mov r1, r5 // src
     ldr r2, =0x1000 // size
     bl gspwn
-    mov r0, r9 // addr
+    mov r0, r6 // addr
     ldr r1, =0x1000 // size
     bl GSPGPU_InvalidateDataCache
-    mov r10, r4
+    mov r7, #0
 _gspwn_aslr_virtual_loop:
-    mov r0, r10 // addr1
-    mov r1, r9 // addr2
+    ldr r0, [sp]
+    add r0, r0, r7 // addr1
+    mov r1, r6 // addr2
     ldr r2, =0x100 // size
     bl memcmp32
     beq _gspwn_aslr_found_page
     ldr r0, =0x1000
-    add r10, r0
-    cmp r10, r5
-    bne _gspwn_aslr_virtual_loop
     add r7, r7, r0
+    ldr r1, [sp,#8]
+    cmp r7, r1
+    bne _gspwn_aslr_virtual_loop
+    add r5, r5, r0
     b _gspwn_aslr_linear_loop
 _gspwn_aslr_found_page:
-    mov r0, r7 // dst
-    mov r1, r10
-    sub r1, r1, r4
-    add r1, r8 // src
+    mov r0, r5 // dst
+    ldr r1, [sp,#4]
+    add r1, r1, r7 // src
     ldr r2, =0x1000 // size
     bl gspwn
     ldr r0, =0x1000
-    add r7, r7, r0
-    sub r6, r6, #1
+    add r5, r5, r0
+    sub r4, r4, #1
     bne _gspwn_aslr_linear_loop
+    add sp, #0xc
     pop {r4-r7,pc}
 .pool
 
