@@ -414,10 +414,9 @@ invalidate_icache:
     bl patch_crr
     ldr r5, =CRO_MAP_FIX
     sub r5, r4, r5
-    mov r0, sp // fixed size
-    mov r1, r4 // addr
-    mov r2, r5 // mapped addr
-    ldr r3, =ICACHE_SIZE+0x2000 // size
+    mov r0, r4 // addr
+    mov r1, r5 // mapped addr
+    ldr r2, =ICACHE_SIZE+0x2000 // size
     bl LDRRO_LoadCRO_New
     add r5, r5, #0xff
     add r5, r5, #0x81
@@ -761,10 +760,6 @@ GSPGPU_InvalidateDataCache: // addr, size
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    cmp r0, #0
-    blt _GSPGPU_InvalidateDataCache_return
-    ldr r0, [r4,#4]
-_GSPGPU_InvalidateDataCache_return:
     pop {r4,pc}
 .pool
 
@@ -782,7 +777,7 @@ GSPGPU_SetBufferSwap: // framebuffer_addr, screen
     str r0, [r4,#8] // active framebuffer
     str r2, [r4,#0xc] // framebuffer addr (left)
     str r2, [r4,#0x10] // framebuffer addr (right)
-    ldr r2, =0x1e0
+    ldr r2, =240*2
     str r2, [r4,#0x14] // stride
     mov r2, #2
     cmp r1, #0
@@ -796,32 +791,28 @@ _GSPGPU_SetBufferSwap_bottom:
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    cmp r0, #0
-    blt _GSPGPU_SetBufferSwap_return
-    ldr r0, [r4,#4]
-_GSPGPU_SetBufferSwap_return:
     pop {r4,pc}
 .pool
 
 .align 1
 .thumb
-LDRRO_LoadCRO_New: // fixed_size, addr, mapped_addr, size
-    push {r4,r5,lr}
-    mov r5, r0
+LDRRO_LoadCRO_New: // addr, mapped_addr, size
+    push {r4,lr}
+    mov r3, r0
     blx _get_command_buffer
     mov r4, r0
     ldr r0, =0x902c2
     str r0, [r4] // header code
-    str r1, [r4,#4] // addr
-    str r2, [r4,#8] // mapped addr
-    str r3, [r4,#0xc] // size
+    str r3, [r4,#4] // addr
+    str r1, [r4,#8] // mapped addr
+    str r2, [r4,#0xc] // size
     mov r0, #0
-    mov r1, #1
     str r0, [r4,#0x10] // data addr
     str r0, [r4,#0x14] // zero
     str r0, [r4,#0x18] // data size
     str r0, [r4,#0x1c] // bss addr
     str r0, [r4,#0x20] // bss size
+    mov r1, #1
     str r1, [r4,#0x24] // auto-link
     str r1, [r4,#0x28] // fix level
     str r0, [r4,#0x2c] // zero
@@ -831,13 +822,7 @@ LDRRO_LoadCRO_New: // fixed_size, addr, mapped_addr, size
     ldr r0, =LDRRO_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    cmp r0, #0
-    blt _LDRRO_LoadCRO_New_return
-    ldr r0, [r4,#8]
-    str r0, [r5] // fixed size
-    ldr r0, [r4,#4]
-_LDRRO_LoadCRO_New_return:
-    pop {r4,r5,pc}
+    pop {r4,pc}
 .pool
 
 .align 1
