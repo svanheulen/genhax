@@ -191,11 +191,8 @@ memcpy: // dst, src, size
 memclr32: // addr, size
     mov r2, #0
 memset32: // addr, size, value
-    mov r3, #3
-    bic r1, r3
 _memset32_set_loop:
-    str r2, [r0]
-    add r0, r0, #4
+    stmia r0!, {r2}
     sub r1, r1, #4
     bne _memset32_set_loop
     bx lr
@@ -203,120 +200,104 @@ _memset32_set_loop:
 .align 1
 .thumb
 memcmp32: // addr1, addr2, size
-    push {r4,lr}
-    mov r3, #3
-    bic r2, r3
 _memcmp32_compare_loop:
-    ldr r3, [r0]
-    add r0, r0, #4
-    ldr r4, [r1]
-    add r1, r1, #4
-    cmp r3, r4
-    bne _memcmp32_mismatch
+    ldmia r0!, {r3}
+    mov r12, r3
+    ldmia r1!, {r3}
+    cmp r3, r12
+    bne _memcmp32_return
     sub r2, r2, #4
     bne _memcmp32_compare_loop
-    mov r0, #0
-    pop {r4,pc}
-_memcmp32_mismatch:
-    mov r0, #1
-    pop {r4,pc}
+_memcmp32_return:
+    bx lr
 
 .align 1
 .thumb
-screen_setup: // framebuffers_ptr
-    push {r4,lr}
+screen_setup: // screen, color
+    push {r4-r6,lr}
+    mov r5, r1
     mov r4, r0
-    ldr r0, =400*240*2
+    ldr r0, =400*240*2 // size
+    beq _screen_setup_top
+    ldr r0, =320*240*2 // size
+_screen_setup_top:
     bl malloc_linear
-    str r0, [r4]
-    mov r1, #0
+    mov r6, r0 // framebuffer
+    mov r1, r4 // screen
     bl GSPGPU_SetBufferSwap
-    mov r0, r4
-    mov r1, #0
-    mov r2, #0
+    mov r0, r6 // framebuffer
+    mov r1, r4 // screen
+    mov r2, r5 // color
     bl screen_clear
-    ldr r0, =320*240*2
-    bl malloc_linear
-    str r0, [r4,#4]
-    mov r1, #1
-    bl GSPGPU_SetBufferSwap
-    mov r0, r4
-    mov r1, #1
-    mov r2, #0
-    bl screen_clear
-    pop {r4,pc}
+    mov r0, r6
+    pop {r4-r6,pc}
 .pool
 
 .align 1
 .thumb
-screen_clear: // framebuffers_ptr, screen, color
-    lsl r3, r2
-    orr r2, r3
+screen_clear: // framebuffer, screen, color
+    lsl r3, r2, #0x10
+    orr r2, r3 // value
     cmp r1, #0
-    bne _screen_clear_bottom
-    ldr r0, [r0]
-    ldr r1, =400*240*2
-    b memset32
-_screen_clear_bottom:
-    ldr r0, [r0,#4]
-    ldr r1, =320*240*2
+    ldr r1, =400*240*2 // size
+    beq _screen_clear_top
+    ldr r1, =320*240*2 // size
+_screen_clear_top:
     b memset32
 .pool
 
 .align 1
 .thumb
-screen_print: // framebuffers_ptr, screen, x, y, string, color
+screen_print: // framebuffer, x, y, string, color
     push {r4,r5,lr}
-    lsl r1, r1, #2
-    ldr r4, [r0,r1]
+    mov r4, r0
     ldr r0, =240*2
-    mul r2, r0
+    mul r1, r0
+    add r4, r4, r1
+    lsl r2, r2, #1
     add r4, r4, r2
-    lsl r3, r3, #1
-    add r4, r4, r3
-    ldr r5, [sp,#0xc]
+    mov r5, r3
 _screen_print_char_loop:
-    ldrb r3, [r5]
-    cmp r3, #0
+    ldrb r0, [r5]
+    cmp r0, #0
     beq _screen_print_return
-    cmp r3, #0x2d
+    cmp r0, #0x2d
     blt _screen_print_default_char
-    cmp r3, #0x3a
+    cmp r0, #0x3a
     ble _screen_print_num_sym
-    cmp r3, #0x41
+    cmp r0, #0x41
     blt _screen_print_default_char
-    cmp r3, #0x5a
+    cmp r0, #0x5a
     ble _screen_print_alpha
 _screen_print_default_char:
-    mov r3, #0
+    mov r0, #0
     b _screen_print_setup_bit_loop
 _screen_print_alpha:
-    sub r3, r3, #6
+    sub r0, r0, #6
 _screen_print_num_sym:
-    sub r3, r3, #0x2d
-    lsl r3, r3, #2
-    adr r0, font_data
-    add r3, r3, r0
-    ldr r3, [r3]
+    sub r0, r0, #0x2d
+    lsl r0, r0, #2
+    adr r1, font_data
+    add r0, r0, r1
+    ldr r0, [r0]
 _screen_print_setup_bit_loop:
-    mov r0, #6
-    mov r1, #5
+    mov r1, #6
+    mov r2, #5
 _screen_print_bit_loop:
-    lsl r2, r3, #0x1f
-    ldr r2, [sp,#0x10]
-    bne _screen_print_foreground
-    mov r2, #0
-_screen_print_foreground:
-    strh r2, [r4]
-    lsr r3, r3, #1
+    lsl r3, r0, #0x1f
+    beq _screen_print_background
+    ldr r3, [sp,#0xc]
+    strh r3, [r4]
+_screen_print_background:
+    lsr r0, r0, #1
     add r4, r4, #2
-    sub r0, r0, #1
-    bne _screen_print_bit_loop
-    ldr r0, =240*2
-    sub r0, r0, #0xc
-    add r4, r4, r0
-    mov r0, #6
     sub r1, r1, #1
+    bne _screen_print_bit_loop
+    ldr r1, =240*2
+    sub r1, r1, #0xc
+    add r4, r4, r1
+    mov r1, #6
+    sub r2, r2, #1
     bne _screen_print_bit_loop
     ldr r0, =240*2
     add r4, r4, r0
@@ -361,7 +342,6 @@ _gspwn_aslr_virtual_loop:
     mov r1, r9 // addr2
     ldr r2, =0x100 // size
     bl memcmp32
-    cmp r0, #0
     beq _gspwn_aslr_found_page
     ldr r0, =0x1000
     add r10, r0
@@ -811,7 +791,6 @@ GSPGPU_SetBufferSwap: // framebuffer_addr, screen
     add r2, r2, #0xff
     add r2, r2, #0x41
 _GSPGPU_SetBufferSwap_bottom:
-    mov r2, #2
     str r2, [r4,#0x18] // format
     str r0, [r4,#0x1c] // framebuffer select
     str r0, [r4,#0x20] // unknown
