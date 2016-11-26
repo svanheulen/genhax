@@ -499,72 +499,56 @@ FSUSER_OpenFile: // file_handle_ptr, archive_handle_ptr, path, open_flags
 
 .align 1
 .thumb
-FSUSER_DeleteFile: // archive_handle_ptr, path_type, path_size, path
-    push {r4,r5,lr}
-    mov r5, r0
+FSUSER_DeleteFile: // archive_handle_ptr, path
+    push {r4-r7,lr}
+    mov r3, r0
+    mov r12, r1
+    mov r0, r1
+    bl strlen
+    add r6, r0, #1 // path size
     blx _get_command_buffer
-    mov r4, r0
-    ldr r0, =0x8040142
-    str r0, [r4] // header code
-    mov r0, #0
-    str r0, [r4,#4] // transaction
-    ldr r0, [r5]
-    str r0, [r4,#8] // archive handle (low)
-    ldr r0, [r5,#4]
-    str r0, [r4,#0xc] // archive handle (high)
-    str r1, [r4,#0x10] // path type
-    str r2, [r4,#0x14] // path size
-    lsl r2, r2, #0xe
-    mov r0, #2
-    orr r2, r0
-    str r2, [r4,#0x18] // path size
-    str r3, [r4,#0x1c] // path
+    ldr r1, =0x8040142 // header code
+    mov r2, #0 // transaction
+    ldmia r3!, {r3,r4} // archive id
+    mov r5, #3 // path type
+    lsl r7, r6, #0xe
+    add r7, r7, #2 // path size
+    stmia r0!, {r1-r7}
+    mov r1, r12 // path
+    str r1, [r0]
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    cmp r0, #0
-    blt _FSUSER_DeleteFile_return
-    ldr r0, [r4,#4]
-_FSUSER_DeleteFile_return:
-    pop {r4,r5,pc}
+    pop {r4-r7,pc}
 .pool
 
 .align 1
 .thumb
-FSUSER_CreateFile: // archive_handle_ptr, path_type, path_size, file_size_low, file_size_high, path
-    push {r4,r5,lr}
-    mov r5, r0
+FSUSER_CreateFile: // archive_handle_ptr, path, file_size_low, file_size_high
+    push {r0-r7,lr}
     blx _get_command_buffer
     mov r4, r0
-    ldr r0, =0x8080202
-    str r0, [r4] // header code
-    mov r0, #0
-    str r0, [r4,#4] // transaction
-    ldr r0, [r5]
-    str r0, [r4,#8] // archive handle (low)
-    ldr r0, [r5,#4]
-    str r0, [r4,#0xc] // archive handle (high)
-    str r1, [r4,#0x10] // path type
-    str r2, [r4,#0x14] // path size
-    mov r0, #0
-    str r0, [r4,#0x18] // attributes
-    str r3, [r4,#0x1c] // file size (low)
-    ldr r0, [sp,#0xc]
-    str r0, [r4,#0x20] // file size (high)
-    lsl r2, r2, #0xe
-    mov r0, #2
-    orr r2, r0
-    str r2, [r4,#0x24] // path size
-    ldr r0, [sp,#0x10]
-    str r0, [r4,#0x28] // path
+    mov r0, r1
+    bl strlen
+    add r6, r0, #1 // path size
+    ldr r0, =0x8080202 // header code
+    mov r1, #0 // transaction
+    ldr r2, [sp]
+    ldmia r2!, {r2,r3} // archive id
+    mov r5, #3 // path type
+    mov r7, r1 // attributes
+    stmia r4!, {r0-r3,r5-r7}
+    ldr r0, [sp,#8] // file size (low)
+    ldr r1, [sp,#0xc] // file size (high)
+    lsl r2, r6, #0xe
+    add r2, r2, #2 // path size
+    ldr r3, [sp,#4] // path
+    stmia r4!, {r0-r3}
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    cmp r0, #0
-    blt _FSUSER_CreateFile_return
-    ldr r0, [r4,#4]
-_FSUSER_CreateFile_return:
-    pop {r4,r5,pc}
+    add sp, #0x10
+    pop {r4-r7,pc}
 .pool
 
 .align 1
@@ -637,35 +621,26 @@ FSFILE_Read: // file_handle_ptr, bytes_read_ptr, buffer, size
 
 .align 1
 .thumb
-FSFILE_Write: // file_handle_ptr, bytes_written_ptr, file_offset_low, file_offset_high, size, buffer
-    push {r4,r5,lr}
-    mov r5, r0
-    blx _get_command_buffer
+FSFILE_Write: // file_handle_ptr, bytes_written_ptr, buffer, size
+    push {r4-r7,lr}
     mov r4, r0
-    ldr r0, =0x8030102
-    str r0, [r4] // header code
-    str r2, [r4,#4] // file offset (low)
-    str r3, [r4,#8] // file offset (high)
-    ldr r0, [sp,#0xc]
-    str r0, [r4,#0xc] // size
-    mov r0, #1
-    str r0, [r4,#0x10] // write option
-    lsl r0, r0, #4
-    mov r2, #0xa
-    orr r0, r2
-    str r0, [r4,#0x14] // size
-    ldr r0, [sp,#0x10]
-    str r0, [r4,#0x18] // buffer
-    ldr r0, [r5] // file handle
-    mov r5, r1
+    blx _get_command_buffer
+    mov r5, r0
+    ldr r0, =0x8030102 // header code
+    mov r12, r1
+    mov r1, #0 // file offset (low)
+    mov r7, r2 // buffer
+    mov r2, r1 // file offest (high)
+    lsl r6, r3, #4
+    add r6, #0xa // size
+    stmia r5!, {r0-r3,r6,r7}
+    ldr r0, [r4] // file handle
+    mov r4, r12
     svc 0x32
-    cmp r0, #0
-    blt _FSFILE_Write_return
-    ldr r0, [r4,#0x8]
-    str r0, [r5] // bytes written
-    ldr r0, [r4,#4]
-_FSFILE_Write_return:
-    pop {r4,r5,pc}
+    sub r5, #0x10
+    ldr r1, [r5]
+    str r1, [r4] // bytes written
+    pop {r4-r7,pc}
 .pool
 
 .align 1
@@ -709,53 +684,44 @@ GSPGPU_FlushDataCache: // addr, size
 .align 1
 .thumb
 GSPGPU_InvalidateDataCache: // addr, size
-    push {r4,lr}
-    mov r2, r0
+    push {r4,r5,lr}
+    mov r2, r0 // addr
     blx _get_command_buffer
-    mov r4, r0
-    ldr r0, =0x90082
-    str r0, [r4] // header code
-    str r2, [r4,#4] // addr
-    str r1, [r4,#8] // size
-    mov r0, #0
-    str r0, [r4,#0xc] // zero
-    ldr r0, =0xffff8001
-    str r0, [r4,#0x10] // kprocess handle
+    ldr r1, =0x90082 // header code
+    mov r3, r1 // size
+    mov r4, #0 // unknown
+    ldr r5, =0xffff8001 // kprocess handle
+    stmia r0!, {r1-r5}
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    pop {r4,pc}
+    pop {r4,r5,pc}
 .pool
 
 .align 1
 .thumb
 GSPGPU_SetBufferSwap: // framebuffer_addr, screen
-    push {r4,lr}
-    mov r2, r0
+    push {r4-r7,lr}
+    mov r4, r0 // framebuffer
     blx _get_command_buffer
-    mov r4, r0
-    ldr r0, =0x50200
-    str r0, [r4] // header code
-    str r1, [r4,#4] // screen
-    mov r0, #0
-    str r0, [r4,#8] // active framebuffer
-    str r2, [r4,#0xc] // framebuffer addr (left)
-    str r2, [r4,#0x10] // framebuffer addr (right)
-    ldr r2, =240*2
-    str r2, [r4,#0x14] // stride
-    mov r2, #2
-    cmp r1, #0
+    mov r2, r1 // screen
+    ldr r1, =0x50200 // header code
+    mov r3, #0 // active framebuffer
+    mov r5, r4 // framebuffer
+    ldr r6, =240*2 // stride
+    mov r7, #2 // format
+    cmp r2, #0
     bne _GSPGPU_SetBufferSwap_bottom
-    add r2, r2, #0xff
-    add r2, r2, #0x41
+    add r7, #0xff
+    add r7, #0x41 // format
 _GSPGPU_SetBufferSwap_bottom:
-    str r2, [r4,#0x18] // format
-    str r0, [r4,#0x1c] // framebuffer select
-    str r0, [r4,#0x20] // unknown
+    stmia r0!, {r1-r7}
+    mov r4, r3 // unknown
+    stmia r0!, {r3,r4}
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
-    pop {r4,pc}
+    pop {r4-r7,pc}
 .pool
 
 .align 1
