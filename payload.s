@@ -821,9 +821,12 @@ SRV_GetServiceHandle: // service_handle_ptr, service_name
     ldr r0, =SRV_HANDLE_PTR
     ldr r0, [r0] // port handle
     svc 0x32
-    sub r5, #8
-    ldr r1, [r5]
-    str r1, [r4] // service handle
+    cmp r0, #0
+    blt _SRV_GetServiceHandle_return
+    sub r5, #0x10
+    ldmia r5!, {r0-r2}
+    str r2, [r4] // service handle
+_SRV_GetServiceHandle_return:
     pop {r4-r6,pc}
 .pool
 
@@ -831,17 +834,23 @@ SRV_GetServiceHandle: // service_handle_ptr, service_name
 .thumb
 HTTPC_Initialize: // service_handle_ptr
     push {r4,lr}
-    mov r4, r0
+    mov r3, r0
     blx _get_command_buffer
-    ldr r1, =0x10044 // header code
-    mov r2, #0 // POST buffer size
-    mov r3, #0x20 // unknown
-    stmia r0!, {r1-r3}
-    mov r1, r2 // unknown
-    mov r3, r2 // POST buffer handle
-    stmia r0!, {r1-r3}
-    ldr r0, [r4] // service handle
+    mov r4, r0
+    ldr r0, =0x10044 // header code
+    mov r1, #0 // POST buffer size
+    mov r2, #0x20 // unknown
+    stmia r4!, {r0-r2}
+    mov r0, r1 // unknown
+    mov r2, r1 // POST buffer handle
+    stmia r4!, {r0-r2}
+    ldr r0, [r3] // service handle
     svc 0x32
+    cmp r0, #0
+    blt _HTTPC_Initialize_return
+    sub r4, #0x14
+    ldr r0, [r4]
+_HTTPC_Initialize_return:
     pop {r4,pc}
 .pool
 
@@ -864,24 +873,32 @@ HTTPC_CreateContext: // service_handle_ptr, context_handle_ptr, url
     stmia r5!, {r0-r2,r6,r7}
     ldr r0, [r3] // service handle
     svc 0x32
-    sub r5, #0xc
-    ldr r1, [r5]
+    cmp r0, #0
+    blt _HTTPC_CreateContext_return
+    sub r5, #0x10
+    ldmia r5!, {r0,r1}
     str r1, [r4] // context handle
+_HTTPC_CreateContext_return:
     pop {r4-r7,pc}
 .pool
 
 .align 1
 .thumb
 HTTPC_CloseContext: // service_handle_ptr, context_handle_ptr
-    push {lr}
+    push {r4,lr}
     mov r3, r0
     blx _get_command_buffer
+    mov r4, r0
     ldr r2, [r1] // context handle
     ldr r1, =0x30040 // header code
     stmia r0!, {r1,r2}
     ldr r0, [r3] // service handle
     svc 0x32
-    pop {pc}
+    cmp r0, #0
+    blt _HTTPC_CloseContext_return
+    ldr r0, [r4]
+_HTTPC_CloseContext_return:
+    pop {r4,pc}
 .pool
 
 .align 1
@@ -897,8 +914,12 @@ HTTPC_GetDownloadSizeState: // service_handle_ptr, download_state_ptr, context_h
     ldr r0, [r3] // service handle
     mov r5, r1
     svc 0x32
-    ldmia r4!, {r1,r2}
+    cmp r0, #0
+    blt _HTTPC_GetDownloadSizeState_return
+    sub r4, r4, #4
+    ldmia r4!, {r0-r2}
     stmia r5!, {r1,r2} // download state
+_HTTPC_GetDownloadSizeState_return:
     pop {r4,r5,pc}
 .pool
 
@@ -906,30 +927,41 @@ HTTPC_GetDownloadSizeState: // service_handle_ptr, download_state_ptr, context_h
 .thumb
 HTTPC_InitializeConnectionSession: // service_handle_ptr, context_handle_ptr
     push {r4,r5,lr}
-    mov r4, r0
+    mov r2, r0
     blx _get_command_buffer
-    ldr r2, [r1]
+    ldr r3, [r1]
     ldr r1, =0x80042
-    mov r3, #0x20
+    mov r4, #0x20
     mov r5, #0
-    stmia r0!, {r1-r3,r5}
-    ldr r0, [r4] // service handle
+    stmia r0!, {r1,r3-r5}
+    mov r4, r0
+    ldr r0, [r2] // service handle
     svc 0x32
+    cmp r0, #0
+    blt _HTTPC_InitializeConnectionSession_return
+    sub r4, #0xc
+    ldr r0, [r4]
+_HTTPC_InitializeConnectionSession_return:
     pop {r4,r5,pc}
 .pool
 
 .align 1
 .thumb
 HTTPC_BeginRequest: // service_handle_ptr, context_handle_ptr
-    push {lr}
+    push {r4,lr}
     mov r3, r0
     blx _get_command_buffer
+    mov r4, r0
     ldr r2, [r1] // context handle
     ldr r1, =0x90040 // header code
     stmia r0!, {r1,r2}
     ldr r0, [r3] // service handle
     svc 0x32
-    pop {pc}
+    cmp r0, #0
+    blt _HTTPC_BeginRequest_return
+    ldr r0, [r4,#4]
+_HTTPC_BeginRequest_return:
+    pop {r4,pc}
 .pool
 
 .align 1
@@ -947,21 +979,31 @@ HTTPC_ReceiveData: // service_handle_ptr, data_buffer, data_buffer_size, context
     stmia r5!, {r0-r3,r6}
     ldr r0, [r4] // service handle
     svc 0x32
+    cmp r0, #0
+    blt _HTTPC_ReceiveData_return
+    sub r5, #0x10
+    ldr r0, [r5]
+_HTTPC_ReceiveData_return:
     pop {r4-r6,pc}
 .pool
 
 .align 1
 .thumb
 HTTPC_SetProxyDefault: // service_handle_ptr, context_handle_ptr
-    push {lr}
+    push {r4,lr}
     mov r3, r0
     blx _get_command_buffer
+    mov r4, r0
     ldr r2, [r1] // context handle
     ldr r1, =0xe0040 // header code
     stmia r0!, {r1,r2}
     ldr r0, [r3] // service handle
     svc 0x32
-    pop {pc}
+    cmp r0, #0
+    blt _HTTPC_SetProxyDefault_return
+    ldr r0, [r4]
+_HTTPC_SetProxyDefault_return:
+    pop {r4,pc}
 .pool
 
 .align 1
@@ -989,6 +1031,11 @@ HTTPC_AddRequestHeader: // service_handle_ptr, context_handle_ptr, name_buffer, 
     stmia r4!, {r3,r6}
     ldr r0, [r5] // service handle
     svc 0x32
+    cmp r0, #0
+    blt _HTTPC_AddRequestHeader_return
+    sub r4, #0x1c
+    ldr r0, [r4]
+_HTTPC_AddRequestHeader_return:
     pop {r4-r7,pc}
 .pool
 
@@ -1017,6 +1064,11 @@ HTTPC_GetResponseHeader: // service_handle_ptr, context_handle_ptr, name_buffer,
     stmia r4!, {r3,r6}
     ldr r0, [r5] // service handle
     svc 0x32
+    cmp r0, #0
+    blt _HTTPC_GetResponseHeader_return
+    sub r4, #0x1c
+    ldr r0, [r4]
+_HTTPC_GetResponseHeader_return:
     pop {r4-r7,pc}
 .pool
 
@@ -1033,22 +1085,31 @@ HTTPC_GetResponseStatusCode: // service_handle_ptr, status_code_ptr, context_han
     ldr r0, [r3] // service handle
     mov r5, r1
     svc 0x32
-    ldr r1, [r4]
+    cmp r0, #0
+    blt _HTTPC_GetResponseStatusCode_return
+    sub r4, r4, #4
+    ldmia r4!, {r0,r1}
     str r1, [r5] // status code
+_HTTPC_GetResponseStatusCode_return:
     pop {r4,r5,pc}
 .pool
 
 .align 1
 .thumb
 HTTPC_Finalize: // service_handle_ptr
-    push {lr}
+    push {r4,lr}
     mov r1, r0
     blx _get_command_buffer
     ldr r2, =0x390000
     str r2, [r0] // header code
+    mov r4, r0
     ldr r0, [r1] // service handle
     svc 0x32
-    pop {pc}
+    cmp r0, #0
+    blt _HTTPC_Finalize_return
+    ldr r0, [r4,#4]
+_HTTPC_Finalize_return:
+    pop {r4,pc}
 .pool
 
 _cro_text_end:
