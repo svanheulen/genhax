@@ -728,27 +728,21 @@ _GSPGPU_SetBufferSwap_bottom:
 .thumb
 LDRRO_LoadCRO_New: // addr, mapped_addr, size
     push {r4,lr}
-    mov r3, r0
+    mov r4, r2 // size
+    mov r2, r0 // addr
     blx _get_command_buffer
-    mov r4, r0
-    ldr r0, =0x902c2
-    str r0, [r4] // header code
-    str r3, [r4,#4] // addr
-    str r1, [r4,#8] // mapped addr
-    str r2, [r4,#0xc] // size
-    mov r0, #0
-    str r0, [r4,#0x10] // data addr
-    str r0, [r4,#0x14] // zero
-    str r0, [r4,#0x18] // data size
-    str r0, [r4,#0x1c] // bss addr
-    str r0, [r4,#0x20] // bss size
-    mov r1, #1
-    str r1, [r4,#0x24] // auto-link
-    str r1, [r4,#0x28] // fix level
-    str r0, [r4,#0x2c] // zero
-    str r0, [r4,#0x30] // zero
-    ldr r0, =0xffff8001
-    str r0, [r4,#0x34] // kprocess handle
+    mov r3, r1 // mapped addr
+    ldr r1, =0x902c2 // header code
+    stmia r0!, {r1-r4}
+    mov r1, #0
+    mov r2, r1
+    stmia r0!, {r1,r2} // data buffer, unknown
+    stmia r0!, {r1} // data buffer size
+    mov r3, #1
+    stmia r0!, {r1-r3} // bss buffer, bss buffer size, auto-link
+    stmia r0!, {r3} // fix level
+    ldr r3, =0xffff8001
+    stmia r0!, {r1-r3} // unknown, transaction, kprocess handle
     ldr r0, =LDRRO_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
@@ -757,30 +751,26 @@ LDRRO_LoadCRO_New: // addr, mapped_addr, size
 
 .align 1
 .thumb
-SRV_GetServiceHandle: // service_handle_ptr, service_name, service_name_len
-    push {r4,r5,lr}
-    mov r5, r0
-    blx _get_command_buffer
+SRV_GetServiceHandle: // service_handle_ptr, service_name
+    push {r4-r6,lr}
     mov r4, r0
+    mov r6, r1
+    mov r0, r1
+    bl strlen
+    mov r3, r0
+    blx _get_command_buffer
+    mov r5, r0
     ldr r0, =0x50100
-    str r0, [r4] // header code
-    ldr r0, [r1]
-    str r0, [r4,#4] // service name (low)
-    ldr r0, [r1,#4]
-    str r0, [r4,#8] // service name (high)
-    str r2, [r4,#0xc] // service name length
-    mov r0, #0
-    str r0, [r4,#0x10] // flags
+    ldmia r6!, {r1,r2}
+    mov r6, #0
+    stmia r5!, {r0-r3,r6}
     ldr r0, =SRV_HANDLE_PTR
     ldr r0, [r0] // port handle
     svc 0x32
-    cmp r0, #0
-    blt _SRV_GetServiceHandle_return
-    ldr r0, [r4,#0xc]
-    str r0, [r5] // service handle
-    ldr r0, [r4,#4]
-_SRV_GetServiceHandle_return:
-    pop {r4,r5,pc}
+    sub r5, #8    
+    ldr r1, [r5]
+    str r1, [r4] // service handle
+    pop {r4-r6,pc}
 .pool
 
 .align 1
