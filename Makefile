@@ -1,6 +1,5 @@
-CC=$(DEVKITARM)/bin/arm-none-eabi-gcc
+include $(DEVKITARM)/base_tools
 CFLAGS=-march=armv6k -mtune=mpcore -x assembler-with-cpp
-OBJCPY=$(DEVKITARM)/bin/arm-none-eabi-objcopy
 
 CRR_HASH_COUNT=96
 
@@ -18,21 +17,21 @@ build/%_nopsled.o: nopsled.s
 	$(CC) $(CFLAGS) -c -o $@ -D$* $<
 
 build/%_nopsled.cro: build/%_nopsled.o
-	$(OBJCPY) -O binary $< $@
+	$(OBJCOPY) -O binary $< $@
 	python patch_cro.py $@ $(CRR_HASH_COUNT)
 
 build/%_payload.o: build/%_nopsled.cro payload.s
 	$(CC) $(CFLAGS) -c -o $@ -D$* -DCRR_HASH_COUNT=$(CRR_HASH_COUNT) -DCRO_FILE_PATH=\"$<\" payload.s
 
 build/%_payload.cro: build/%_payload.o
-	$(OBJCPY) -O binary $< $@
+	$(OBJCOPY) -O binary $< $@
 	python patch_cro.py $@ $(CRR_HASH_COUNT)
 
 build/%_exploit.o: build/%_payload.cro exploit.s
 	$(CC) $(CFLAGS) -c -o $@ -D$* -DCRR_HASH_COUNT=$(CRR_HASH_COUNT) -DCRO_FILE_PATH=\"$<\" exploit.s
 
 build/%_exploit.tex: build/%_exploit.o
-	$(OBJCPY) -O binary $< $@
+	$(OBJCOPY) -O binary $< $@
 
 build/%_event.arc: build/%_exploit.tex
 	python make_quest.py -q 1010001 $* $< $@
