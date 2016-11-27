@@ -731,30 +731,29 @@ _GSPGPU_InvalidateDataCache_return:
 .thumb
 GSPGPU_SetBufferSwap: // framebuffer_addr, screen
     push {r4-r7,lr}
-    mov r4, r0 // framebuffer
+    mov r5, r0 // framebuffer
     blx _get_command_buffer
+    mov r4, r0
     mov r2, r1 // screen
     ldr r1, =0x50200 // header code
     mov r3, #0 // active framebuffer
-    mov r5, r4 // framebuffer
-    ldr r6, =240*2 // stride
-    mov r7, #2 // format
+    mov r6, r5 // framebuffer
+    ldr r7, =240*2 // stride
+    stmia r0!, {r1-r7}
+    mov r1, #2 // format
     cmp r2, #0
     bne _GSPGPU_SetBufferSwap_bottom
-    add r7, #0xff
-    add r7, #0x41 // format
+    add r1, #0xff
+    add r1, #0x41 // format
 _GSPGPU_SetBufferSwap_bottom:
-    stmia r0!, {r1-r7}
     mov r4, r3 // unknown
-    stmia r0!, {r3,r4}
-    mov r4, r0
+    stmia r0!, {r1,r3,r4}
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
     cmp r0, #0
     blt _GSPGPU_SetBufferSwap_return
-    sub r4, #0x20
-    ldr r0, [r4]
+    ldr r0, [r4,#4] // result code
 _GSPGPU_SetBufferSwap_return:
     pop {r4-r7,pc}
 .pool
@@ -762,13 +761,12 @@ _GSPGPU_SetBufferSwap_return:
 .align 1
 .thumb
 LDRRO_LoadCRO_New: // addr, mapped_addr, size
-    push {r4,lr}
-    mov r4, r2 // size
-    mov r2, r0 // addr
+    push {r0-r2,r4,r5,lr}
     blx _get_command_buffer
-    mov r3, r1 // mapped addr
+    mov r4, r0
     ldr r1, =0x902c2 // header code
-    stmia r0!, {r1-r4}
+    pop {r2,r3,r5} // addr, mapped addr, size
+    stmia r0!, {r1-r3,r5}
     mov r1, #0
     mov r2, r1
     stmia r0!, {r1,r2} // data buffer, unknown
@@ -778,16 +776,14 @@ LDRRO_LoadCRO_New: // addr, mapped_addr, size
     stmia r0!, {r3} // fix level
     ldr r3, =0xffff8001
     stmia r0!, {r1-r3} // unknown, transaction, kprocess handle
-    mov r4, r0
     ldr r0, =LDRRO_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
     cmp r0, #0
     blt _LDRRO_LoadCRO_New_return
-    sub r4, #0x34
-    ldr r0, [r4]
+    ldr r0, [r4,#4] // result code
 _LDRRO_LoadCRO_New_return:
-    pop {r4,pc}
+    pop {r4,r5,pc}
 .pool
 
 .align 1
