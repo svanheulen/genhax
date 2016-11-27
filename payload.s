@@ -789,26 +789,25 @@ _LDRRO_LoadCRO_New_return:
 .align 1
 .thumb
 SRV_GetServiceHandle: // service_handle_ptr, service_name
-    push {r4-r6,lr}
-    mov r4, r0
-    mov r6, r1
+    push {r0,r1,r4-r6,lr}
     mov r0, r1
     bl strlen
     mov r3, r0
     blx _get_command_buffer
-    mov r5, r0
+    mov r4, r0
     ldr r0, =0x50100
+    pop {r5,r6}
     ldmia r6!, {r1,r2}
     mov r6, #0
-    stmia r5!, {r0-r3,r6}
+    stmia r4!, {r0-r3,r6}
     ldr r0, =SRV_HANDLE_PTR
     ldr r0, [r0] // port handle
     svc 0x32
     cmp r0, #0
     blt _SRV_GetServiceHandle_return
-    sub r5, #0x10
-    ldmia r5!, {r0-r2}
-    str r2, [r4] // service handle
+    sub r4, #0x10
+    ldmia r4!, {r0-r2}
+    str r2, [r5] // service handle
 _SRV_GetServiceHandle_return:
     pop {r4-r6,pc}
 .pool
