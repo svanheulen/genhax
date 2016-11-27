@@ -709,24 +709,22 @@ GSPGPU_FlushDataCache: // addr, size
 .align 1
 .thumb
 GSPGPU_InvalidateDataCache: // addr, size
-    push {r4,r5,lr}
-    mov r2, r0 // addr
+    push {r0,r1,r4-r6,lr}
     blx _get_command_buffer
-    ldr r1, =0x90082 // header code
-    mov r3, r1 // size
-    mov r4, #0 // unknown
-    ldr r5, =0xffff8001 // kprocess handle
-    stmia r0!, {r1-r5}
     mov r4, r0
+    ldr r1, =0x90082 // header code
+    pop {r2,r3} // addr, size
+    mov r5, #0 // unknown
+    ldr r6, =0xffff8001 // kprocess handle
+    stmia r0!, {r1-r3,r5,r6}
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
     cmp r0, #0
     blt _GSPGPU_InvalidateDataCache_return
-    sub r4, #0x10
-    ldr r0, [r4]
+    ldr r0, [r4,#4] // result code
 _GSPGPU_InvalidateDataCache_return:
-    pop {r4,r5,pc}
+    pop {r4-r6,pc}
 .pool
 
 .align 1
