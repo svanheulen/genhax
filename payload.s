@@ -470,32 +470,32 @@ _get_command_buffer:
 .align 1
 .thumb
 FSUSER_OpenFile: // file_handle_ptr, archive_handle_ptr, path, open_flags
-    push {r4-r7,lr}
-    mov r4, r0
+    push {r0,r4-r7,lr}
     blx _get_command_buffer
-    mov r5, r0
+    mov r4, r0
     ldr r0, =0x80201c2 // header code
-    ldmia r1!, {r6,r7} // archive handle
+    ldmia r1!, {r5,r6} // archive handle
     mov r1, #0 // transaction
-    stmia r5!, {r0,r1,r6,r7}
-    mov r7, r2 // path
+    mov r7, #3 // path type
+    stmia r4!, {r0,r1,r5-r7}
+    mov r5, r2 // path
     mov r0, r2 // str
     bl strlen
-    add r1, r0, #1 // path size
-    mov r0, #3 // path type
-    mov r2, r3 // open flags
-    mov r3, #0 // attributes
-    lsl r6, r1, #0xe
-    add r6, r6, #2 // path size
-    stmia r5!, {r0-r3,r6,r7}
+    add r0, r0, #1 // path size
+    mov r1, r3 // open flags
+    mov r2, #0 // attributes
+    lsl r3, r0, #0xe
+    add r3, r3, #2 // path size
+    stmia r4!, {r0-r3,r5}
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
+    pop {r5}
     cmp r0, #0
     blt _FSUSER_OpenFile_return
-    sub r5, #0x24
-    ldmia r5!, {r0-r2}
-    str r2, [r4] // file handle
+    sub r4, #0x24
+    ldmia r4!, {r0-r2} // result code
+    str r2, [r5] // file handle
 _FSUSER_OpenFile_return:
     pop {r4-r7,pc}
 .pool
@@ -503,29 +503,26 @@ _FSUSER_OpenFile_return:
 .align 1
 .thumb
 FSUSER_DeleteFile: // archive_handle_ptr, path
-    push {r4-r7,lr}
-    mov r3, r0
-    mov r12, r1
+    push {r1,r4-r7,lr}
+    ldmia r0!, {r3,r5} // archive id
     mov r0, r1
     bl strlen
-    add r6, r0, #1 // path size
+    add r7, r0, #1 // path size
     blx _get_command_buffer
+    mov r4, r0
     ldr r1, =0x8040142 // header code
     mov r2, #0 // transaction
-    ldmia r3, {r3,r4} // archive id
-    mov r5, #3 // path type
-    lsl r7, r6, #0xe
-    add r7, r7, #2 // path size
-    stmia r0!, {r1-r7}
-    mov r1, r12 // path
-    str r1, [r0]
-    mov r4, r0
+    mov r6, #3 // path type
+    stmia r0!, {r1-r3,r5-r7}
+    lsl r1, r7, #0xe
+    add r1, r1, #2 // path size
+    pop {r2} // path
+    stmia r0!, {r1,r2}
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
     blt _FSUSER_DeleteFile_return
-    sub r4, #0x18
-    ldr r0, [r4]
+    ldr r0, [r4,#4] // result code
 _FSUSER_DeleteFile_return:
     pop {r4-r7,pc}
 .pool
@@ -533,60 +530,56 @@ _FSUSER_DeleteFile_return:
 .align 1
 .thumb
 FSUSER_CreateFile: // archive_handle_ptr, path, file_size_low, file_size_high
-    push {r0-r7,lr}
-    blx _get_command_buffer
-    mov r4, r0
+    push {r1-r3,r4-r7,lr}
+    ldmia r0!, {r3,r5} // archive id
     mov r0, r1
     bl strlen
-    add r6, r0, #1 // path size
-    ldr r0, =0x8080202 // header code
-    mov r1, #0 // transaction
-    ldr r2, [sp]
-    ldmia r2, {r2,r3} // archive id
-    mov r5, #3 // path type
-    mov r7, r1 // attributes
-    stmia r4!, {r0-r3,r5-r7}
-    ldr r0, [sp,#8] // file size (low)
-    ldr r1, [sp,#0xc] // file size (high)
-    lsl r2, r6, #0xe
-    add r2, r2, #2 // path size
-    ldr r3, [sp,#4] // path
-    stmia r4!, {r0-r3}
+    add r7, r0, #1 // path size
+    blx _get_command_buffer
+    mov r4, r0
+    ldr r1, =0x8080202 // header code
+    mov r2, #0 // transaction
+    mov r6, #3 // path type
+    stmia r0!, {r1-r3,r5-r7}
+    mov r1, r2 // attributes
+    pop {r6} // path
+    pop {r2,r3} // file size
+    lsl r5, r7, #0xe
+    add r5, r5, #2 // path size
+    stmia r0!, {r1-r3,r5,r6}
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
     cmp r0, #0
     blt _FSUSER_CreateFile_return
-    sub r4, #0x28
-    ldr r0, [r4]
+    ldr r0, [r4,#4] // result code
 _FSUSER_CreateFile_return:
-    add sp, #0x10
     pop {r4-r7,pc}
 .pool
 
 .align 1
 .thumb
 FSUSER_OpenArchive: // archive_handle_ptr
-    push {r4-r7,lr}
-    mov r4, r0
+    push {r0,r4-r7,lr}
     blx _get_command_buffer
-    mov r5, r0
+    mov r4, r0
     ldr r0, =0x80c00c2 // header code
     mov r1, #6 // archive id
     mov r2, #2 // path type
     mov r3, #0xc // path size
-    lsl r6, r3, #0xe
-    add r6, r6, #2 // path size
-    adr r7, extdata_archive_path // path
-    stmia r5!, {r0-r3,r6,r7}
+    lsl r5, r3, #0xe
+    add r5, r5, #2 // path size
+    adr r6, extdata_archive_path // path
+    stmia r4!, {r0-r3,r5,r6}
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
+    pop {r5}
     cmp r0, #0
     blt _FSUSER_OpenArchive_return
-    sub r5, #0x14
-    ldmia r5!, {r0-r2}
-    stmia r4!, {r1,r2} // archive handle
+    sub r4, #0x14
+    ldmia r4!, {r0-r2} // result code
+    stmia r5!, {r1,r2} // archive handle
 _FSUSER_OpenArchive_return:
     pop {r4-r7,pc}
 .pool
@@ -600,19 +593,17 @@ extdata_archive_path:
 .thumb
 FSUSER_CloseArchive: // archive_handle_ptr
     push {r4,lr}
-    mov r2, r0
+    ldmia r0!, {r2,r3}
     blx _get_command_buffer
-    ldr r1, =0x80e0080
-    ldmia r2, {r2,r3}
-    stmia r0!, {r1-r3}
     mov r4, r0
+    ldr r1, =0x80e0080 // header code
+    stmia r0!, {r1-r3}
     ldr r0, =FSUSER_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
     cmp r0, #0
     blt _FSUSER_CloseArchive_return
-    sub r4, #8
-    ldr r0, [r4]
+    ldr r0, [r4,#4] // result code
 _FSUSER_CloseArchive_return:
     pop {r4,pc}
 .pool
@@ -620,26 +611,25 @@ _FSUSER_CloseArchive_return:
 .align 1
 .thumb
 FSFILE_Read: // file_handle_ptr, bytes_read_ptr, buffer, size
-    push {r4-r7,lr}
-    mov r4, r0
-    blx _get_command_buffer
+    push {r1,r4-r7,lr}
     mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
     ldr r0, =0x80200c2 // header code
-    mov r12, r1
     mov r1, #0 // file offset (low)
     mov r7, r2 // buffer
     mov r2, r1 // file offest (high)
     lsl r6, r3, #4
     add r6, #0xc // size
-    stmia r5!, {r0-r3,r6,r7}
-    ldr r0, [r4] // file handle
-    mov r4, r12
+    stmia r4!, {r0-r3,r6,r7}
+    ldr r0, [r5] // file handle
     svc 0x32
+    pop {r5}
     cmp r0, #0
     blt _FSFILE_Read_return
-    sub r5, #0x14
-    ldmia r5!, {r0,r1}
-    str r1, [r4] // bytes read
+    sub r4, #0x14
+    ldmia r4!, {r0,r1} // result code
+    str r1, [r5] // bytes read
 _FSFILE_Read_return:
     pop {r4-r7,pc}
 .pool
@@ -647,26 +637,25 @@ _FSFILE_Read_return:
 .align 1
 .thumb
 FSFILE_Write: // file_handle_ptr, bytes_written_ptr, buffer, size
-    push {r4-r7,lr}
-    mov r4, r0
-    blx _get_command_buffer
+    push {r1,r4-r7,lr}
     mov r5, r0
+    blx _get_command_buffer
+    mov r4, r0
     ldr r0, =0x8030102 // header code
-    mov r12, r1
     mov r1, #0 // file offset (low)
     mov r7, r2 // buffer
     mov r2, r1 // file offest (high)
     lsl r6, r3, #4
     add r6, #0xa // size
-    stmia r5!, {r0-r3,r6,r7}
-    ldr r0, [r4] // file handle
-    mov r4, r12
+    stmia r4!, {r0-r3,r6,r7}
+    ldr r0, [r5] // file handle
     svc 0x32
+    pop {r5}
     cmp r0, #0
     blt _FSFILE_Write_return
-    sub r5, #0x18
-    ldmia r5!, {r0,r1}
-    str r1, [r4] // bytes written
+    sub r4, #0x18
+    ldmia r4!, {r0,r1} // result code
+    str r1, [r5] // bytes written
 _FSFILE_Write_return:
     pop {r4-r7,pc}
 .pool
@@ -674,22 +663,22 @@ _FSFILE_Write_return:
 .align 1
 .thumb
 FSFILE_GetSize: // file_handle_ptr, file_size_ptr
-    push {r4,r5,lr}
-    mov r2, r0
+    push {r1,r4,lr}
+    mov r1, r0
     blx _get_command_buffer
-    mov r5, r0
+    mov r4, r0
     ldr r0, =0x8040000
-    str r0, [r5] // header code
-    ldr r0, [r2] // file handle
-    mov r4, r1
+    str r0, [r4] // header code
+    ldr r0, [r1] // file handle
     svc 0x32
+    pop {r5}
     cmp r0, #0
     blt _FSFILE_GetSize_return
-    add r5, r5, #4
-    ldmia r5!, {r0-r2}
-    stmia r4!, {r1,r2} // file size
+    add r4, r4, #4
+    ldmia r4!, {r0-r2} // result code
+    stmia r5!, {r1,r2} // file size
 _FSFILE_GetSize_return:
-    pop {r4,r5,pc}
+    pop {r4,pc}
 .pool
 
 .align 1
@@ -698,14 +687,14 @@ FSFILE_Close: // file_handle_ptr
     push {r4,lr}
     mov r1, r0
     blx _get_command_buffer
-    ldr r2, =0x8080000
-    str r2, [r0] // header code
     mov r4, r0
+    ldr r0, =0x8080000 // header code
+    str r0, [r4]
     ldr r0, [r1] // file handle
     svc 0x32
     cmp r0, #0
     blt _FSFILE_Close_return
-    ldr r0, [r4,#4]
+    ldr r0, [r4,#4] // result code
 _FSFILE_Close_return:
     pop {r4,pc}
 .pool
