@@ -560,7 +560,7 @@ _FSUSER_CreateFile_return:
 .align 1
 .thumb
 FSUSER_OpenArchive: // archive_handle_ptr
-    push {r0,r4-r7,lr}
+    push {r0,r4-r6,lr}
     blx _get_command_buffer
     mov r4, r0
     ldr r0, =0x80c00c2 // header code
@@ -581,7 +581,7 @@ FSUSER_OpenArchive: // archive_handle_ptr
     ldmia r4!, {r0-r2} // result code
     stmia r5!, {r1,r2} // archive handle
 _FSUSER_OpenArchive_return:
-    pop {r4-r7,pc}
+    pop {r4-r6,pc}
 .pool
 .align 2
 extdata_archive_path:
@@ -663,7 +663,7 @@ _FSFILE_Write_return:
 .align 1
 .thumb
 FSFILE_GetSize: // file_handle_ptr, file_size_ptr
-    push {r1,r4,lr}
+    push {r1,r4,r5,lr}
     mov r1, r0
     blx _get_command_buffer
     mov r4, r0
@@ -678,7 +678,7 @@ FSFILE_GetSize: // file_handle_ptr, file_size_ptr
     ldmia r4!, {r0-r2} // result code
     stmia r5!, {r1,r2} // file size
 _FSFILE_GetSize_return:
-    pop {r4,pc}
+    pop {r4,r5,pc}
 .pool
 
 .align 1
