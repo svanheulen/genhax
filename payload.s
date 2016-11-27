@@ -896,7 +896,7 @@ HTTPC_CloseContext: // service_handle_ptr, context_handle_ptr
     svc 0x32
     cmp r0, #0
     blt _HTTPC_CloseContext_return
-    ldr r0, [r4]
+    ldr r0, [r4,#4]
 _HTTPC_CloseContext_return:
     pop {r4,pc}
 .pool
@@ -1001,7 +1001,7 @@ HTTPC_SetProxyDefault: // service_handle_ptr, context_handle_ptr
     svc 0x32
     cmp r0, #0
     blt _HTTPC_SetProxyDefault_return
-    ldr r0, [r4]
+    ldr r0, [r4,#4]
 _HTTPC_SetProxyDefault_return:
     pop {r4,pc}
 .pool
@@ -1024,6 +1024,7 @@ HTTPC_AddRequestHeader: // service_handle_ptr, context_handle_ptr, name_buffer, 
     orr r6, r1
     pop {r5}
     pop {r1,r7}
+    ldr r1, [r1]
     stmia r4!, {r0-r3,r6,r7}
     lsl r3, r3, #4
     add r3, #0xa
@@ -1041,22 +1042,21 @@ _HTTPC_AddRequestHeader_return:
 
 .align 1
 .thumb
-HTTPC_GetResponseHeader: // service_handle_ptr, context_handle_ptr, name_buffer, value_buffer
+HTTPC_GetResponseHeader: // service_handle_ptr, context_handle_ptr, name_buffer, value_buffer, value_buffer_size
     push {r0-r7,lr}
-    mov r0, r3
-    bl strlen
-    add r3, r0, #1
-    ldr r0, [sp,#8]
+    mov r0, r2
     bl strlen
     add r2, r0, #1
     blx _get_command_buffer
     mov r4, r0
     ldr r0, =0x1e00c4
     ldr r1, =0xc02
+    ldr r3, [sp,#0x24]
     lsl r6, r2, #0xe
     orr r6, r1
     pop {r5}
     pop {r1,r7}
+    ldr r1, [r1]
     stmia r4!, {r0-r3,r6,r7}
     lsl r3, r3, #4
     add r3, #0xc
