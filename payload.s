@@ -69,9 +69,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 _cro_text_start:
     // reset stack
     mov sp, #0x10000000
+    // setup framebuffers
+    ldr r0, =400*240*2
+    blx malloc_linear
+    push {r0}
+    ldr r1, =400*240*2
+    blx memclr32
+    ldr r0, [sp]
+    mov r1, #0
+    ldr r2, =0x142
+    blx GSPGPU_SetBufferSwap
+    ldr r0, =320*240*2
+    blx malloc_linear
+    push {r0}
+    ldr r1, =320*240*2
+    blx memclr32
+    ldr r0, [sp]
+    mov r1, #1
+    mov r2, #2
+    blx GSPGPU_SetBufferSwap
+    // run main
     blx main
     // exit if main returns
     svc 3
+.pool
 
 .align 1
 .thumb
@@ -81,7 +102,6 @@ main:
     // open extdata archive
     add r0, sp, #0x8 // archive handle pointer
     bl FSUSER_OpenArchive
-    mov r1, #0
     bl error_check
     // open otherapp file
     add r0, sp, #0x10 // file handle pointer
@@ -89,13 +109,11 @@ main:
     adr r2, otherapp_file_path // path
     mov r3, #1 // open flags
     bl FSUSER_OpenFile
-    mov r1, #0
     bl error_check
     // get otherapp size
     add r0, sp, #0x10 // file handle pointer
     mov r1, sp // size output pointer
     bl FSFILE_GetSize
-    mov r1, #0
     bl error_check
     // round otherapp size to nearest page
     ldr r6, [sp]
@@ -112,23 +130,19 @@ main:
     mov r2, r5 // buffer
     ldr r3, [sp] // size
     bl FSFILE_Read
-    mov r1, #0
     bl error_check
     // close otherapp file
     add r0, sp, #0x10 // file handle pointer
     bl FSFILE_Close
-    mov r1, #0
     bl error_check
     // close extdata archive
     add r0, sp, #0x8 // archive handle pointer
     bl FSUSER_CloseArchive
-    mov r1, #0
     bl error_check
     // flush data cache for linear buffer
     mov r0, r5 // addr
     mov r1, r6 // size
     bl GSPGPU_FlushDataCache
-    mov r1, #0
     bl error_check
     // gspwn otherapp from linear buffer to code
     ldr r0, =OTHERAPP_VA // dst
@@ -262,32 +276,24 @@ _format_result_code_number:
 
 .align 1
 .thumb
-error_check: // result_code, framebuffer
+error_check: // result_code
     cmp r0, #0
-    bne _error_check_display
+    blt _error_check_display
     bx lr
 _error_check_display:
-    push {r0,r1,lr}
-    sub sp, #0x14
-    add r0, sp, #4
+    push {r0,lr}
+    sub sp, #0x10
+    mov r0, sp
     adr r1, error_label
     bl strcpy
-    ldr r1, [sp,#0x14]
+    ldr r1, [sp,#0x10]
     bl format_result_code
-    ldr r0, [sp,#0x18]
-    cmp r0, #0
-    bne _error_check_clear
-    bl screen_setup
-    str r0, [sp,#0x18]
-_error_check_clear:
-    mov r1, #0
+    mov r0, #0
     bl screen_clear
-    ldr r0, [sp,#0x18]
-    mov r1, #155
-    mov r2, #117
+    mov r0, #155
+    mov r1, #117
+    mov r2, sp
     ldr r3, =0xf800
-    str r3, [sp]
-    add r3, sp, #4
     bl screen_print
 _error_check_sleep_loop:
     mov r0, #1
@@ -295,7 +301,7 @@ _error_check_sleep_loop:
     mov r1, #0
     svc 0xa
     b _error_check_sleep_loop
-    add sp, #0x1c
+    add sp, #0x14
     pop {pc}
 .pool
 .align 2
@@ -304,19 +310,9 @@ error_label:
 
 .align 1
 .thumb
-screen_setup:
-    push {r4,lr}
-    ldr r0, =400*240*2 // size
-    bl malloc_linear
-    mov r4, r0 // framebuffer
-    bl GSPGPU_SetBufferSwap
-    mov r0, r4
-    pop {r4,pc}
-.pool
-
-.align 1
-.thumb
-screen_clear: // framebuffer, color
+screen_clear: // color
+    ldr r0, =0x0ffffffc
+    ldr r0, [r0] // dst
     lsl r2, r1, #0x10
     orr r2, r1 // value
     ldr r1, =400*240*2 // size
@@ -325,15 +321,16 @@ screen_clear: // framebuffer, color
 
 .align 1
 .thumb
-screen_print: // framebuffer, x, y, string, color
-    push {r4,r5,lr}
-    mov r4, r0
-    ldr r0, =240*2
-    mul r1, r0
+screen_print: // x, y, string, color
+    push {r4-r6,lr}
+    ldr r4, =0x0ffffffc
+    ldr r4, [r4]
+    ldr r5, =240*2
+    mul r0, r5
+    add r4, r4, r0
+    lsl r1, r1, #1
     add r4, r4, r1
-    lsl r2, r2, #1
-    add r4, r4, r2
-    mov r5, r3
+    mov r5, r2
 _screen_print_char_loop:
     ldrb r0, [r5]
     cmp r0, #0
@@ -361,9 +358,8 @@ _screen_print_setup_bit_loop:
     mov r1, #6
     mov r2, #5
 _screen_print_bit_loop:
-    lsl r3, r0, #0x1f
+    lsl r6, r0, #0x1f
     beq _screen_print_background
-    ldr r3, [sp,#0xc]
     strh r3, [r4]
 _screen_print_background:
     lsr r0, r0, #1
@@ -381,7 +377,7 @@ _screen_print_background:
     add r5, r5, #1
     b _screen_print_char_loop
 _screen_print_return:
-    pop {r4,r5,pc}
+    pop {r4-r6,pc}
 .pool
 .align 2
 font_data:
@@ -411,7 +407,6 @@ _gspwn_aslr_linear_loop:
     mov r0, r6 // addr
     ldr r1, =0x1000 // size
     bl GSPGPU_InvalidateDataCache
-    mov r1, #0
     bl error_check
     mov r7, #0
 _gspwn_aslr_virtual_loop:
@@ -498,7 +493,6 @@ invalidate_icache:
     mov r1, r5 // mapped addr
     ldr r2, =ICACHE_SIZE+0x2000 // size
     bl LDRRO_LoadCRO_New
-    mov r1, #0
     bl error_check
     add r5, r5, #0xff
     add r5, r5, #0x81
@@ -535,7 +529,6 @@ _patch_crr_copy_loop:
     mov r0, r5 // addr
     ldr r1, =CRR_HASH_COUNT*0x20 // size
     bl GSPGPU_FlushDataCache
-    mov r1, #0
     bl error_check
     ldr r0, =CRR_START_LINEAR+0x360 // dst
     mov r1, r5 // src
@@ -813,19 +806,19 @@ _GSPGPU_InvalidateDataCache_return:
 
 .align 1
 .thumb
-GSPGPU_SetBufferSwap: // framebuffer
-    push {r4-r7,lr}
+GSPGPU_SetBufferSwap: // framebuffer, screen, format
+    push {r2,r4-r7,lr}
     mov r5, r0 // framebuffer
     blx _get_command_buffer
     mov r4, r0
+    mov r2, r1 // screen
     ldr r1, =0x50200 // header code
-    mov r2, #0 // screen
-    mov r3, r2 // active framebuffer
+    mov r3, #0 // active framebuffer
     mov r6, r5 // framebuffer
     ldr r7, =240*2 // stride
     stmia r0!, {r1-r3,r5-r7}
-    mov r1, #0xff
-    add r1, #0x43 // format
+    pop {r1} // format
+    mov r2, r3 // unknown
     stmia r0!, {r1-r3}
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
