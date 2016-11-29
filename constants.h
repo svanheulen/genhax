@@ -71,6 +71,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define OTHERAPP_VA 0x101000
 #define ICACHE_SIZE 0x8000
 #define CRO_MAP_FIX 0x8000000 - (0x100000 + CODEBIN_SIZE + (BSS_SIZE & ~0xfff))
+#define HID_SHARED_MEM 0x10000000
 // texture file settings
 #define MIPMAP_COUNT 11
 #define TEXTURE_COUNT 252
