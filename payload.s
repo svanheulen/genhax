@@ -81,16 +81,22 @@ main:
     // open extdata archive
     add r0, sp, #0x8 // archive handle pointer
     bl FSUSER_OpenArchive
+    mov r1, #0
+    bl error_check
     // open otherapp file
     add r0, sp, #0x10 // file handle pointer
     add r1, sp, #0x8 // archive handle pointer
     adr r2, otherapp_file_path // path
     mov r3, #1 // open flags
     bl FSUSER_OpenFile
+    mov r1, #0
+    bl error_check
     // get otherapp size
     add r0, sp, #0x10 // file handle pointer
     mov r1, sp // size output pointer
     bl FSFILE_GetSize
+    mov r1, #0
+    bl error_check
     // round otherapp size to nearest page
     ldr r6, [sp]
     ldr r0, =0xfff
@@ -106,16 +112,24 @@ main:
     mov r2, r5 // buffer
     ldr r3, [sp] // size
     bl FSFILE_Read
+    mov r1, #0
+    bl error_check
     // close otherapp file
     add r0, sp, #0x10 // file handle pointer
     bl FSFILE_Close
+    mov r1, #0
+    bl error_check
     // close extdata archive
     add r0, sp, #0x8 // archive handle pointer
     bl FSUSER_CloseArchive
+    mov r1, #0
+    bl error_check
     // flush data cache for linear buffer
     mov r0, r5 // addr
     mov r1, r6 // size
     bl GSPGPU_FlushDataCache
+    mov r1, #0
+    bl error_check
     // gspwn otherapp from linear buffer to code
     ldr r0, =OTHERAPP_VA // dst
     mov r1, r5 // src
@@ -212,36 +226,100 @@ _strlen_count_loop:
 
 .align 1
 .thumb
-screen_setup: // screen, color
-    push {r4-r6,lr}
-    mov r5, r1
-    mov r4, r0
-    ldr r0, =400*240*2 // size
-    beq _screen_setup_top
-    ldr r0, =320*240*2 // size
-_screen_setup_top:
-    bl malloc_linear
-    mov r6, r0 // framebuffer
-    mov r1, r4 // screen
-    bl GSPGPU_SetBufferSwap
-    mov r0, r6 // framebuffer
-    mov r1, r4 // screen
-    mov r2, r5 // color
+strcpy: // dst, src
+_strcpy_copy_loop:
+    ldrb r2, [r1]
+    add r1, r1, #1
+    strb r2, [r0]
+    add r0, r0, #1
+    cmp r2, #0
+    bne _strcpy_copy_loop
+    sub r0, r0, #1
+    bx lr
+
+.align 1
+.thumb
+format_result_code: // dst, result_code
+    push {r4,lr}
+    mov r4, #0x1c
+_format_result_code_char_loop:
+    mov r2, r1
+    lsr r2, r4
+    mov r3, #0xf
+    and r2, r3
+    cmp r2, #9
+    bls _format_result_code_number
+    add r2, r2, #7
+_format_result_code_number:
+    add r2, #0x30
+    strb r2, [r0]
+    add r0, r0, #1
+    sub r4, r4, #4
+    bpl _format_result_code_char_loop
+    mov r1, #0
+    strb r1, [r0]
+    pop {r4,pc}
+
+.align 1
+.thumb
+error_check: // result_code, framebuffer
+    cmp r0, #0
+    bne _error_check_display
+    bx lr
+_error_check_display:
+    push {r0,r1,lr}
+    sub sp, #0x14
+    add r0, sp, #4
+    adr r1, error_label
+    bl strcpy
+    ldr r1, [sp,#0x14]
+    bl format_result_code
+    ldr r0, [sp,#0x18]
+    cmp r0, #0
+    bne _error_check_clear
+    bl screen_setup
+    str r0, [sp,#0x18]
+_error_check_clear:
+    mov r1, #0
     bl screen_clear
-    mov r0, r6
-    pop {r4-r6,pc}
+    ldr r0, [sp,#0x18]
+    mov r1, #155
+    mov r2, #117
+    ldr r3, =0xf800
+    str r3, [sp]
+    add r3, sp, #4
+    bl screen_print
+_error_check_sleep_loop:
+    mov r0, #1
+    lsl r0, r0, #0x14
+    mov r1, #0
+    svc 0xa
+    b _error_check_sleep_loop
+    add sp, #0x1c
+    pop {pc}
+.pool
+.align 2
+error_label:
+    .asciz "ERROR: "
+
+.align 1
+.thumb
+screen_setup:
+    push {r4,lr}
+    ldr r0, =400*240*2 // size
+    bl malloc_linear
+    mov r4, r0 // framebuffer
+    bl GSPGPU_SetBufferSwap
+    mov r0, r4
+    pop {r4,pc}
 .pool
 
 .align 1
 .thumb
-screen_clear: // framebuffer, screen, color
-    lsl r3, r2, #0x10
-    orr r2, r3 // value
-    cmp r1, #0
+screen_clear: // framebuffer, color
+    lsl r2, r1, #0x10
+    orr r2, r1 // value
     ldr r1, =400*240*2 // size
-    beq _screen_clear_top
-    ldr r1, =320*240*2 // size
-_screen_clear_top:
     b memset32
 .pool
 
@@ -333,6 +411,8 @@ _gspwn_aslr_linear_loop:
     mov r0, r6 // addr
     ldr r1, =0x1000 // size
     bl GSPGPU_InvalidateDataCache
+    mov r1, #0
+    bl error_check
     mov r7, #0
 _gspwn_aslr_virtual_loop:
     ldr r0, [sp]
@@ -418,6 +498,8 @@ invalidate_icache:
     mov r1, r5 // mapped addr
     ldr r2, =ICACHE_SIZE+0x2000 // size
     bl LDRRO_LoadCRO_New
+    mov r1, #0
+    bl error_check
     add r5, r5, #0xff
     add r5, r5, #0x81
     blx r5
@@ -453,6 +535,8 @@ _patch_crr_copy_loop:
     mov r0, r5 // addr
     ldr r1, =CRR_HASH_COUNT*0x20 // size
     bl GSPGPU_FlushDataCache
+    mov r1, #0
+    bl error_check
     ldr r0, =CRR_START_LINEAR+0x360 // dst
     mov r1, r5 // src
     ldr r2, =CRR_HASH_COUNT*0x20 // size
@@ -729,25 +813,20 @@ _GSPGPU_InvalidateDataCache_return:
 
 .align 1
 .thumb
-GSPGPU_SetBufferSwap: // framebuffer_addr, screen
+GSPGPU_SetBufferSwap: // framebuffer
     push {r4-r7,lr}
     mov r5, r0 // framebuffer
     blx _get_command_buffer
     mov r4, r0
-    mov r2, r1 // screen
     ldr r1, =0x50200 // header code
-    mov r3, #0 // active framebuffer
+    mov r2, #0 // screen
+    mov r3, r2 // active framebuffer
     mov r6, r5 // framebuffer
     ldr r7, =240*2 // stride
     stmia r0!, {r1-r3,r5-r7}
-    mov r1, #2 // format
-    cmp r2, #0
-    bne _GSPGPU_SetBufferSwap_bottom
-    add r1, #0xff
-    add r1, #0x41 // format
-_GSPGPU_SetBufferSwap_bottom:
-    mov r5, r3 // unknown
-    stmia r0!, {r1,r3,r5}
+    mov r1, #0xff
+    add r1, #0x43 // format
+    stmia r0!, {r1-r3}
     ldr r0, =GSPGPU_HANDLE_PTR
     ldr r0, [r0] // service handle
     svc 0x32
