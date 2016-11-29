@@ -253,6 +253,23 @@ _strcpy_copy_loop:
 
 .align 1
 .thumb
+input_wait:
+    push {r4,lr}
+    ldr r4, =HID_SHARED_MEM
+    ldr r4, [r4,#0x1c]
+_input_wait_check_loop:
+    mov r0, #1
+    lsl r0, r0, #0x14
+    mov r1, #0
+    svc 0xa
+    ldr r0, =HID_SHARED_MEM
+    ldr r0, [r0,#0x1c]
+    cmp r0, r4
+    beq _input_wait_check_loop
+    pop {r4,pc}
+
+.align 1
+.thumb
 format_result_code: // dst, result_code
     push {r4,lr}
     mov r4, #0x1c
@@ -281,32 +298,34 @@ error_check: // result_code
     blt _error_check_display
     bx lr
 _error_check_display:
-    push {r0,lr}
-    sub sp, #0x10
+    push {lr}
+    sub sp, #0xc
+    mov r1, r0
     mov r0, sp
-    adr r1, error_label
-    bl strcpy
-    ldr r1, [sp,#0x10]
     bl format_result_code
     mov r0, #0
     bl screen_clear
-    mov r0, #155
-    mov r1, #117
+    mov r0, #119
+    mov r1, #124
+    adr r2, error_check_help_string
+    ldr r3, =0x7ff
+    bl screen_print
+    mov r0, #176
+    mov r1, #110
     mov r2, sp
     ldr r3, =0xf800
     bl screen_print
 _error_check_sleep_loop:
-    mov r0, #1
-    lsl r0, r0, #0x14
-    mov r1, #0
-    svc 0xa
-    b _error_check_sleep_loop
-    add sp, #0x14
+    bl input_wait
+    lsl r0, r0, #0x1f
+    beq _error_check_sleep_loop
+    svc 3
+    add sp, #0xc
     pop {pc}
 .pool
 .align 2
-error_label:
-    .asciz "ERROR: "
+error_check_help_string:
+    .asciz "AN ERROR OCCURRED / A: EXIT"
 
 .align 1
 .thumb
