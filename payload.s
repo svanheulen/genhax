@@ -138,54 +138,6 @@ _main_download:
 
 .align 1
 .thumb
-read_otherapp:
-    push {r4,r5,lr}
-    sub sp, #0x14
-    // open extdata archive
-    mov r0, sp // archive handle pointer
-    bl FSUSER_OpenArchive
-    // open otherapp file
-    add r0, sp, #8 // file handle pointer
-    mov r1, sp // archive handle pointer
-    adr r2, otherapp_file_path // path
-    mov r3, #1 // open flags
-    bl FSUSER_OpenFile
-    // get otherapp size
-    add r0, sp, #8 // file handle pointer
-    add r1, sp, #0xc // size output pointer
-    bl FSFILE_GetSize
-    // round otherapp size to nearest page
-    ldr r4, [sp,#0xc]
-    ldr r0, =0xfff
-    add r4, r4, r0
-    bic r4, r0
-    // malloc linear for otherapp
-    mov r0, r4 // size
-    bl malloc_linear
-    mov r5, r0
-    // read otherapp file to linear
-    add r0, sp, #8 // file handle pointer
-    add r1, sp, #0xc // bytes read pointer
-    mov r2, r5 // buffer
-    ldr r3, [sp,#0xc] // size
-    bl FSFILE_Read
-    // close otherapp file
-    add r0, sp, #8 // file handle pointer
-    bl FSFILE_Close
-    // close extdata archive
-    mov r0, sp // archive handle pointer
-    bl FSUSER_CloseArchive
-    mov r0, r5
-    mov r1, r4
-    add sp, #0x14
-    pop {r4,r5,pc}
-.pool
-.align 2
-otherapp_file_path:
-    .asciz "/otherapp"
-
-.align 1
-.thumb
 download_otherapp:
     push {r4,r5,lr}
     sub sp, #0x98
@@ -339,6 +291,54 @@ user_agent_value:
 .align 2
 location_name:
     .asciz "Location"
+
+.align 1
+.thumb
+read_otherapp:
+    push {r4,r5,lr}
+    sub sp, #0x14
+    // open extdata archive
+    mov r0, sp // archive handle pointer
+    bl FSUSER_OpenArchive
+    // open otherapp file
+    add r0, sp, #8 // file handle pointer
+    mov r1, sp // archive handle pointer
+    adr r2, otherapp_file_path // path
+    mov r3, #1 // open flags
+    bl FSUSER_OpenFile
+    // get otherapp size
+    add r0, sp, #8 // file handle pointer
+    add r1, sp, #0xc // size output pointer
+    bl FSFILE_GetSize
+    // round otherapp size to nearest page
+    ldr r4, [sp,#0xc]
+    ldr r0, =0xfff
+    add r4, r4, r0
+    bic r4, r0
+    // malloc linear for otherapp
+    mov r0, r4 // size
+    bl malloc_linear
+    mov r5, r0
+    // read otherapp file to linear
+    add r0, sp, #8 // file handle pointer
+    add r1, sp, #0xc // bytes read pointer
+    mov r2, r5 // buffer
+    ldr r3, [sp,#0xc] // size
+    bl FSFILE_Read
+    // close otherapp file
+    add r0, sp, #8 // file handle pointer
+    bl FSFILE_Close
+    // close extdata archive
+    mov r0, sp // archive handle pointer
+    bl FSUSER_CloseArchive
+    mov r0, r5
+    mov r1, r4
+    add sp, #0x14
+    pop {r4,r5,pc}
+.pool
+.align 2
+otherapp_file_path:
+    .asciz "/otherapp"
 
 .align 1
 .thumb
