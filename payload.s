@@ -315,10 +315,10 @@ _error_check_display:
     mov r2, sp
     ldr r3, =0xf800
     bl screen_print
-_error_check_sleep_loop:
+_error_check_button_loop:
     bl input_wait
     lsl r0, r0, #0x1f
-    beq _error_check_sleep_loop
+    beq _error_check_button_loop
     svc 3
     add sp, #0xc
     pop {pc}
@@ -330,10 +330,10 @@ error_check_help_string:
 .align 1
 .thumb
 screen_clear: // color
+    lsl r2, r0, #0x10
+    orr r2, r0 // value
     ldr r0, =0x0ffffffc
     ldr r0, [r0] // dst
-    lsl r2, r1, #0x10
-    orr r2, r1 // value
     ldr r1, =400*240*2 // size
     b memset32
 .pool
