@@ -329,6 +329,179 @@ error_check_help_string:
 
 .align 1
 .thumb
+format_version_number: // dst, number
+    push {r4,lr}
+    mov r2, #0xa0
+    mov r3, #0x10
+    mov r4, #0
+_format_version_number_divmod_loop:
+    cmp r1, r2
+    bcc _format_version_number_skip_sub
+    sub r1, r1, r2
+    orr r4, r3
+_format_version_number_skip_sub:
+    lsr r2, r2, #1
+    lsr r3, r3, #1
+    bne _format_version_number_divmod_loop
+    cmp r4, #0
+    beq _format_version_number_skip_digit
+    add r4, #0x30
+    strb r4, [r0]
+    add r0, r0, #1
+_format_version_number_skip_digit:
+    add r1, #0x30
+    strb r1, [r0]
+    add r0, r0, #1
+    mov r1, #0x2d
+    strb r1, [r0]
+    add r0, r0, #1
+    mov r1, #0
+    strb r1, [r0]
+    pop {r4,pc}
+
+.align 1
+.thumb
+format_version_region: // dst, region
+    lsl r1, r1, #2
+    adr r2, region_strings
+    add r1, r1, r2
+    b strcpy
+.pool
+.align 2
+region_strings:
+    .asciz "JPN"
+    .asciz "EUR"
+    .asciz "USA"
+    .asciz "KOR"
+
+.align 1
+.thumb
+format_selection: // dst, version, selection
+_format_selection_find_start_loop:
+    cmp r2, #0
+    beq _format_selection_found_start
+    mov r3, #0x20
+    strb r3, [r0]
+    add r0, r0, #1
+    ldrb r3, [r1]
+    add r1, r1, #1
+    cmp r3, #0x2d
+    bne _format_selection_find_start_loop
+    sub r2, r2, #1
+    b _format_selection_find_start_loop
+_format_selection_found_start:
+    ldrb r3, [r1]
+    add r1, r1, #1
+    cmp r3, #0x2d
+    beq _format_selection_return
+    cmp r3, #0
+    beq _format_selection_return
+    mov r3, #0x2d
+    strb r3, [r0]
+    add r0, r0, #1
+    b _format_selection_found_start
+_format_selection_return:
+    mov r3, #0
+    strb r3, [r0]
+    bx lr
+
+.align 1
+.thumb
+select_version: // dst
+    push {r4,r5,lr}
+    sub sp, #0x44
+    mov r1, #11
+    mov r2, #2
+    mov r3, #0
+    mov r4, #35
+    mov r5, #0
+    push {r0-r5}
+    mov r4, #0
+_select_version_display_loop:
+    ldr r0, [sp]
+    ldr r1, [sp,#4]
+    bl format_version_number
+    ldr r1, [sp,#8]
+    bl format_version_number
+    ldr r1, [sp,#0xc]
+    bl format_version_number
+    ldr r1, [sp,#0x10]
+    bl format_version_number
+    ldr r1, [sp,#0x14]
+    bl format_version_region
+    add r0, sp, #0x18
+    ldr r1, [sp]
+    mov r2, r4
+    bl format_selection
+    mov r0, #0
+    bl screen_clear
+    mov r0, #29
+    mov r1, #124
+    adr r2, select_version_help_string
+    ldr r3, =0x7ff
+    bl screen_print
+    mov r0, #143
+    mov r1, #110
+    ldr r2, [sp]
+    ldr r3, =0xffff
+    bl screen_print
+    mov r0, #143
+    mov r1, #105
+    add r2, sp, #0x18
+    ldr r3, =0xf81f
+    bl screen_print
+_select_version_button_loop:
+    bl input_wait
+    add r1, sp, #4
+    lsl r2, r4, #2
+    add r1, r1, r2
+    ldr r2, [r1]
+    cmp r0, #0x10
+    bne _select_version_left
+    cmp r4, #4
+    beq _select_version_button_loop
+    add r4, r4, #1
+    b _select_version_display_loop
+_select_version_left:
+    cmp r0, #0x20
+    bne _select_version_up
+    cmp r4, #0
+    beq _select_version_button_loop
+    sub r4, r4, #1
+    b _select_version_display_loop
+_select_version_up:
+    cmp r0, #0x40
+    bne _select_version_down
+    mov r3, #3
+    cmp r4, #4
+    beq _select_version_region_limit
+    mov r3, #99
+_select_version_region_limit:
+    cmp r2, r3
+    beq _select_version_button_loop
+    add r2, r2, #1
+    str r2, [r1]
+    b _select_version_display_loop
+_select_version_down:
+    cmp r0, #0x80
+    bne _select_version_a
+    cmp r2, #0
+    beq _select_version_button_loop
+    sub r2, r2, #1
+    str r2, [r1]
+    b _select_version_display_loop
+_select_version_a:
+    cmp r0, #1
+    bne _select_version_button_loop
+    add sp, #0x5c
+    pop {r4,r5,pc}
+.pool
+.align 2
+select_version_help_string:
+    .asciz "SELECT SYSTEM VERSION / DPAD: CHANGE VALUES / A: CONTINUE"
+
+.align 1
+.thumb
 screen_clear: // color
     lsl r2, r0, #0x10
     orr r2, r0 // value
