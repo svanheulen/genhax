@@ -1,6 +1,10 @@
 This is a secondary homebrew exploit for Monster Hunter Generations. It works
 for the JPN, EUR and USA regions of the game, using the latest game updates.
 
+You can update the otherapp payload by holding the "R" button when you trigger
+the exploit. A screen should then display that will allow you to pick your
+system version and region.
+
 There are some notable limitations for this exploit:
   * It only works on New 3DS systems. This is because game uses extended memory
     mode on Old 3DS systems.
