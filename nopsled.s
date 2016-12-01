@@ -66,6 +66,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     .word 0 // unknown count
 
 .org 0x180, 0
+.arm
 _cro_text_start:
 .fill ICACHE_SIZE
     bx lr

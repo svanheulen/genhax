@@ -66,27 +66,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     .word 0 // unknown count
 
 .org 0x180, 0
+.arm
 _cro_text_start:
     // reset stack
     mov sp, #0x10000000
     // setup framebuffers
-    ldr r0, =400*240*2
+    ldr r0, =400*240*2 // size
     blx malloc_linear
-    push {r0}
-    ldr r1, =400*240*2
+    push {r0} // addr
+    ldr r1, =400*240*2 // size
     blx memclr32
-    ldr r0, [sp]
-    mov r1, #0
-    ldr r2, =0x142
+    ldr r0, [sp] // framebuffer
+    mov r1, #0 // screen
+    ldr r2, =0x142 // format
     blx GSPGPU_SetBufferSwap
-    ldr r0, =320*240*2
+    ldr r0, =320*240*2 // size
     blx malloc_linear
-    push {r0}
-    ldr r1, =320*240*2
+    push {r0} // addr
+    ldr r1, =320*240*2 // size
     blx memclr32
-    ldr r0, [sp]
-    mov r1, #1
-    mov r2, #2
+    ldr r0, [sp] // framebuffer
+    mov r1, #1 // screen
+    mov r2, #2 // format
     blx GSPGPU_SetBufferSwap
     // run main
     blx main
@@ -98,6 +99,7 @@ _cro_text_start:
 .thumb
 main:
     push {r4,r5,lr}
+    // check buttons
     ldr r0, =HID_SHARED_MEM
     ldr r0, [r0,#0x1c]
     lsr r0, r0, #1
@@ -105,12 +107,14 @@ main:
     and r0, r1
     cmp r0, #0
     beq _main_read
+    // download otherapp if "R" button pressed
     bl download_otherapp
     b _main_download
 _main_read:
+    // read otherapp from exdata if "R" not pressed
     bl read_otherapp
 _main_download:
-    // flush data cache for linear buffer
+    // flush data cache for otherapp linear buffer
     mov r4, r0 // addr
     mov r5, r1 // size
     bl GSPGPU_FlushDataCache
@@ -140,105 +144,129 @@ _main_download:
 .thumb
 download_otherapp:
     push {r4,r5,lr}
+    // get main http:C service handle
     sub sp, #0x98
-    add r0, sp, #4
-    adr r1, service_name
+    add r0, sp, #4 // service handle pointer
+    adr r1, service_name // service name
     bl SRV_GetServiceHandle
-    add r0, sp, #4
+    // intitialize http:C service
+    add r0, sp, #4 // service handle pointer
     bl HTTPC_Initialize
-    add r0, sp, #0x18
-    adr r1, otherapp_url
+    // build url from selected version/region
+    add r0, sp, #0x18 // dst
+    adr r1, otherapp_url // src
     bl strcpy
     bl select_version
-    add r0, sp, #4
-    add r1, sp, #8
-    add r2, sp, #0x18
+    // create context with initial request url
+    add r0, sp, #4 // service handle pointer
+    add r1, sp, #8 // context handle pointer
+    add r2, sp, #0x18 // url
     bl HTTPC_CreateContext
-    add r0, sp, #0xc
-    adr r1, service_name
+    // create a sub service handle for the context
+    add r0, sp, #0xc // service handle pointer
+    adr r1, service_name // service name
     bl SRV_GetServiceHandle
-    add r0, sp, #0xc
-    add r1, sp, #8
+    // initialize the sesssion
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_InitializeConnectionSession
-    add r0, sp, #0xc
-    add r1, sp, #8
+    // enable the configured proxy
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_SetProxyDefault
-    add r0, sp, #0xc
-    add r1, sp, #8
-    adr r2, user_agent_name
-    adr r3, user_agent_value
+    // add the user agent header
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
+    adr r2, user_agent_name // header name
+    adr r3, user_agent_value // header value
     bl HTTPC_AddRequestHeader
-    add r0, sp, #0xc
-    add r1, sp, #8
+    // send the request
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_BeginRequest
-    add r0, sp, #0xc
-    add r1, sp, #0x10
-    add r2, sp, #8
+    // get the status code for the response
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #0x10 // status code pointer
+    add r2, sp, #8 // context handle pointer
     bl HTTPC_GetResponseStatusCode
-    add r0, sp, #0x18
-    mov r1, #0x80
+    // get the redirect url
+    add r0, sp, #0x18 // addr
+    mov r1, #0x80 // size
     bl memclr32
-    add r0, sp, #0xc
-    add r1, sp, #8
-    adr r2, location_name
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
+    adr r2, location_name // header name
     mov r3, #0x80
-    str r3, [sp]
-    add r3, sp, #0x18
+    str r3, [sp] // header value buffer size
+    add r3, sp, #0x18 // header value buffer
     bl HTTPC_GetResponseHeader
-    ldr r0, [sp,#0xc]
+    // close the sub service and context
+    ldr r0, [sp,#0xc] // service handle
     svc 0x23
-    add r0, sp, #4
-    add r1, sp, #8
+    add r0, sp, #4 // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_CloseContext
-    add r0, sp, #4
-    add r1, sp, #8
-    add r2, sp, #0x18
+    // create a new context with the redirected url
+    add r0, sp, #4 // service handle pointer
+    add r1, sp, #8 // context handle pointer
+    add r2, sp, #0x18 // url
     bl HTTPC_CreateContext
-    add r0, sp, #0xc
-    adr r1, service_name
+    // create a sub service handle for the context
+    add r0, sp, #0xc // service handle pointer
+    adr r1, service_name // service name
     bl SRV_GetServiceHandle
-    add r0, sp, #0xc
-    add r1, sp, #8
+    // initialize the sesssion
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_InitializeConnectionSession
-    add r0, sp, #0xc
-    add r1, sp, #8
+    // enable the configured proxy
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_SetProxyDefault
-    add r0, sp, #0xc
-    add r1, sp, #8
-    adr r2, user_agent_name
-    adr r3, user_agent_value
+    // add the user agent header
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
+    adr r2, user_agent_name // header name
+    adr r3, user_agent_value // header value
     bl HTTPC_AddRequestHeader
-    add r0, sp, #0xc
-    add r1, sp, #8
+    // send the request
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_BeginRequest
-    add r0, sp, #0xc
-    add r1, sp, #0x10
-    add r2, sp, #8
+    // get the status code for the response
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #0x10 // status code pointer
+    add r2, sp, #8 // context handle pointer
     bl HTTPC_GetResponseStatusCode
-    add r0, sp, #0xc
-    add r1, sp, #0x10
-    add r2, sp, #8
+    // get the size of the otherapp file
+    add r0, sp, #0xc // service handle pointer
+    add r1, sp, #0x10 // size info pointer
+    add r2, sp, #8 // context handle pointer
     bl HTTPC_GetDownloadSizeState
+    // create a linear buffer for the otherapp file
     ldr r4, [sp,#0x14]
     ldr r0, =0xfff
     add r4, r4, r0
     bic r4, r0
-    mov r0, r4
+    mov r0, r4 // size
     bl malloc_linear
     mov r5, r0
-    add r0, sp, #0xc
-    mov r1, r5
-    ldr r2, [sp,#0x14]
-    add r3, sp, #8
+    // download the otherapp file
+    add r0, sp, #0xc // service handle pointer
+    mov r1, r5 // buffer
+    ldr r2, [sp,#0x14] // buffer size
+    add r3, sp, #8 // context handle pointer
     bl HTTPC_ReceiveData
-    ldr r0, [sp,#0xc]
+    // close the sub service and context
+    ldr r0, [sp,#0xc] // service handle
     svc 0x23
-    add r0, sp, #4
-    add r1, sp, #8
+    add r0, sp, #4 // service handle pointer
+    add r1, sp, #8 // context handle pointer
     bl HTTPC_CloseContext
-    add r0, sp, #4
+    // shutdown the http:C and close the service handle
+    add r0, sp, #4 // service handle pointer
     bl HTTPC_Finalize
-    ldr r0, [sp,#4]
+    ldr r0, [sp,#4] // service handle
     svc 0x23
     // open extdata archive
     add r0, sp, #4 // archive handle pointer
@@ -437,6 +465,7 @@ _input_wait_check_loop:
     cmp r0, r4
     beq _input_wait_check_loop
     pop {r4,pc}
+.pool
 
 .align 1
 .thumb
@@ -470,20 +499,20 @@ error_check: // result_code
 _error_check_display:
     push {lr}
     sub sp, #0xc
-    mov r1, r0
-    mov r0, sp
+    mov r1, r0 // result code
+    mov r0, sp // dst
     bl format_result_code
-    mov r0, #0
+    mov r0, #0 // color
     bl screen_clear
-    mov r0, #119
-    mov r1, #124
-    adr r2, error_check_help_string
-    ldr r3, =0x7ff
+    mov r0, #119 // x
+    mov r1, #124 // y
+    adr r2, error_check_help_string // string
+    ldr r3, =0x7ff // color
     bl screen_print
-    mov r0, #176
-    mov r1, #110
-    mov r2, sp
-    ldr r3, =0xf800
+    mov r0, #176 // x
+    mov r1, #110 // y
+    mov r2, sp // string
+    ldr r3, =0xf800 // color
     bl screen_print
 _error_check_button_loop:
     bl input_wait
@@ -534,7 +563,7 @@ _format_version_number_skip_digit:
 format_version_region: // dst, region
     lsl r1, r1, #2
     adr r2, region_strings
-    add r1, r1, r2
+    add r1, r1, r2 // src
     b strcpy
 .pool
 .align 2
@@ -588,37 +617,37 @@ select_version: // dst
     push {r0-r5}
     mov r4, #0
 _select_version_display_loop:
-    ldr r0, [sp]
-    ldr r1, [sp,#4]
+    ldr r0, [sp] // dst
+    ldr r1, [sp,#4] // number
     bl format_version_number
-    ldr r1, [sp,#8]
+    ldr r1, [sp,#8] // number
     bl format_version_number
-    ldr r1, [sp,#0xc]
+    ldr r1, [sp,#0xc] // number
     bl format_version_number
-    ldr r1, [sp,#0x10]
+    ldr r1, [sp,#0x10] // number
     bl format_version_number
-    ldr r1, [sp,#0x14]
+    ldr r1, [sp,#0x14] // region
     bl format_version_region
-    add r0, sp, #0x18
-    ldr r1, [sp]
-    mov r2, r4
+    add r0, sp, #0x18 // dst
+    ldr r1, [sp] // version
+    mov r2, r4 // selection
     bl format_selection
-    mov r0, #0
+    mov r0, #0 // color
     bl screen_clear
-    mov r0, #29
-    mov r1, #124
-    adr r2, select_version_help_string
-    ldr r3, =0x7ff
+    mov r0, #29 // x
+    mov r1, #124 // y
+    adr r2, select_version_help_string // string
+    ldr r3, =0x7ff // color
     bl screen_print
-    mov r0, #143
-    mov r1, #110
-    ldr r2, [sp]
-    ldr r3, =0xffff
+    mov r0, #143 // x
+    mov r1, #110 // y
+    ldr r2, [sp] // string
+    ldr r3, =0xffff // color
     bl screen_print
-    mov r0, #143
-    mov r1, #105
-    add r2, sp, #0x18
-    ldr r3, =0xf81f
+    mov r0, #143 // x
+    mov r1, #105 // y
+    add r2, sp, #0x18 // string
+    ldr r3, =0xf81f // color
     bl screen_print
 _select_version_button_loop:
     bl input_wait
