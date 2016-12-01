@@ -203,6 +203,7 @@ download_otherapp:
     // close the sub service and context
     ldr r0, [sp,#0xc] // service handle
     svc 0x23
+    bl error_check
     add r0, sp, #4 // service handle pointer
     add r1, sp, #8 // context handle pointer
     bl HTTPC_CloseContext
@@ -260,6 +261,7 @@ download_otherapp:
     // close the sub service and context
     ldr r0, [sp,#0xc] // service handle
     svc 0x23
+    bl error_check
     add r0, sp, #4 // service handle pointer
     add r1, sp, #8 // context handle pointer
     bl HTTPC_CloseContext
@@ -268,6 +270,7 @@ download_otherapp:
     bl HTTPC_Finalize
     ldr r0, [sp,#4] // service handle
     svc 0x23
+    bl error_check
     // open extdata archive
     add r0, sp, #4 // archive handle pointer
     bl FSUSER_OpenArchive
