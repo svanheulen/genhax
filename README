@@ -1,3 +1,11 @@
+This repo only contains the exploit itself.
+
+For the primary installer (JPN only) see here:
+  https://github.com/svanheulen/genhax_proxy_installer
+
+For the secondary installer (all regions) see here:
+  https://github.com/svanheulen/genhax_installer
+
 This is a secondary homebrew exploit for Monster Hunter Generations. It works
 for the JPN, EUR and USA regions of the game, using the latest game updates.
 
@@ -19,9 +27,6 @@ There are some notable limitations for this exploit:
 
 Technical details can be found on the wiki:
   https://github.com/svanheulen/genhax/wiki
-
-An installer with instructions can be found in this repo:
-  https://github.com/svanheulen/genhax_installer
 
 You can report issues, get the latest version, and view the source at:
   https://github.com/svanheulen/genhax
