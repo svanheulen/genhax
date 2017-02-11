@@ -1,13 +1,11 @@
 This repo only contains the exploit itself.
 
-For the primary installer (JPN only) see here:
-  https://github.com/svanheulen/genhax_proxy_installer
-
 For the secondary installer (all regions) see here:
   https://github.com/svanheulen/genhax_installer
 
 This is a secondary homebrew exploit for Monster Hunter Generations. It works
-for the JPN, EUR and USA regions of the game, using the latest game updates.
+for the JPN, EUR and USA regions of the game, without any game updates
+installed.
 
 You can update the otherapp payload by holding the "R" button when you trigger
 the exploit. A screen should then display that will allow you to pick your
